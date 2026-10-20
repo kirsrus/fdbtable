@@ -96,8 +96,15 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 	r.Attrs(func(a slog.Attr) bool {
 		attrs.WriteString(" ")
 		attrs.WriteString(keyColor.Sprint(a.Key + "="))
-		// attrs.WriteString("=")
-		attrs.WriteString(a.Value.String())
+		// Значение с пробелами оборачиваем в кавычки, иначе выводим как есть.
+		val := a.Value.String()
+		if strings.ContainsAny(val, " \t") {
+			attrs.WriteString(keyColor.Sprint(`"`))
+			attrs.WriteString(val)
+			attrs.WriteString(keyColor.Sprint(`"`))
+		} else {
+			attrs.WriteString(val)
+		}
 		return true
 	})
 	// Секция source в конце, как обычный атрибут (без пробелов).
