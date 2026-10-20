@@ -60,8 +60,8 @@ var serveCmd = &cobra.Command{
 
 		// Список воркеров приложения.
 		workersList := []workers.Worker{
-			// Воркер web-сервера. Пробрасываем порт, базу данных и логгер.
-			web.New(port, db, slog.Default()),
+			// Воркер web-сервера. Пробрасываем порт, базу данных, логгер и версию.
+			web.New(port, db, slog.Default(), version),
 		}
 
 		// Запуск всех воркеров.

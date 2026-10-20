@@ -1,0 +1,253 @@
+/* ============================================================
+   fdbtable — технологический дизайн.
+   Общие стили для шаблонов web-интерфейса.
+   Вёрстка на div-блоках с float — совместимо со старыми браузерами,
+   без фреймворков и CSS-переменных.
+   ============================================================ */
+
+/* Страница начинается от верхнего левого угла */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #eef1f5;
+    color: #1f2937;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 14px;
+}
+
+/* Каркас страницы на div-блоках */
+.page {
+    width: 100%;
+    min-height: 100%;
+}
+
+/* ---------- Заголовок ---------- */
+.header {
+    background: #ffffff;
+    border-bottom: 2px solid #00a86b;
+    padding: 10px 16px;
+    white-space: nowrap;
+}
+.header .prompt {
+    color: #00a86b;
+    font-weight: bold;
+}
+.header .title {
+    color: #00a86b;
+    font-size: 20px;
+    font-weight: bold;
+}
+.header .cursor {
+    color: #00a86b;
+    animation: blink 1s step-end infinite;
+}
+.header .header-sub {
+    color: #6b7280;
+    margin-left: 16px;
+    font-size: 12px;
+}
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+/* ---------- Тело ---------- */
+.body {
+    overflow: hidden; /* clearfix для float-колонок */
+}
+
+/* Левая колонка — коммутаторы */
+.sidebar {
+    float: left;
+    width: 300px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border-right: 1px solid #c3ccd6;
+    padding: 12px;
+}
+
+/* Правая колонка — порты */
+.content {
+    float: left;
+    width: calc(100% - 300px);
+    box-sizing: border-box;
+    background: #eef1f5;
+    padding: 12px;
+}
+
+/* ---------- Панели ---------- */
+.panel {
+    border: 1px solid #c3ccd6;
+    background: #ffffff;
+}
+.panel-title {
+    background: #e2e8f0;
+    border-bottom: 1px solid #c3ccd6;
+    color: #00a86b;
+    padding: 6px 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+/* ---------- Кнопки сортировки ---------- */
+.sort-bar {
+    padding: 6px 8px;
+    border-bottom: 1px solid #d5dce5;
+}
+.sort-btn {
+    background: #e2e8f0;
+    color: #6b7280;
+    border: 1px solid #c3ccd6;
+    padding: 3px 8px;
+    margin-right: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+}
+.sort-btn:hover,
+.sort-btn.active {
+    color: #00a86b;
+    border-color: #00a86b;
+}
+
+/* ---------- Список коммутаторов ---------- */
+.sw-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.sw-list li {
+    padding: 6px 8px;
+    border-bottom: 1px solid #d5dce5;
+    cursor: pointer;
+}
+.sw-list li:hover {
+    background: #e2e8f0;
+}
+.sw-list li.selected {
+    background: #d1fae5;
+    border-left: 3px solid #00a86b;
+}
+.sw-ip {
+    color: #0077b6;
+}
+.sw-name {
+    color: #1f2937;
+    margin-left: 6px;
+}
+.sw-actions {
+    float: right;
+}
+.sw-actions a,
+.sw-actions button {
+    color: #6b7280;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    font-family: inherit;
+}
+.sw-actions a:hover {
+    color: #0077b6;
+}
+.sw-actions button:hover {
+    color: #d64545;
+}
+.sw-empty {
+    color: #6b7280;
+    padding: 10px 8px;
+    cursor: default;
+}
+
+/* ---------- Форма добавления коммутатора ---------- */
+.sw-form {
+    padding: 8px;
+    border-top: 1px solid #c3ccd6;
+}
+.sw-form input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid #c3ccd6;
+    color: #1f2937;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    font-family: inherit;
+}
+.sw-form input[type="text"]:focus {
+    border-color: #00a86b;
+    outline: none;
+}
+.sw-form .form-buttons {
+    overflow: hidden;
+}
+.sw-form button {
+    width: 100%;
+    background: #00a86b;
+    color: #ffffff;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+}
+.sw-form button:hover {
+    background: #008f5a;
+}
+.sw-form button.cancel-btn {
+    display: none;
+    background: #e2e8f0;
+    color: #1f2937;
+    margin-top: 6px;
+}
+.sw-form button.cancel-btn:hover {
+    background: #d5dce5;
+}
+
+/* ---------- Таблица портов (растягивающаяся) ---------- */
+.ports-panel {
+    height: 100%;
+}
+.ports-table {
+    width: 100%;
+    height: 100%;
+    border-collapse: collapse;
+}
+.ports-table th {
+    background: #e2e8f0;
+    color: #0077b6;
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid #c3ccd6;
+    font-size: 12px;
+}
+.ports-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #d5dce5;
+    color: #1f2937;
+}
+.ports-table tr:hover td {
+    background: #e2e8f0;
+}
+.ports-placeholder {
+    padding: 20px;
+    color: #6b7280;
+    text-align: center;
+}
+
+/* ---------- Футер ---------- */
+.footer {
+    background: #e2e8f0;
+    border-top: 1px solid #c3ccd6;
+    padding: 6px 16px;
+    color: #6b7280;
+    font-size: 12px;
+}
+.footer-version {
+    float: right;
+    color: #00a86b;
+}

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Каркас страницы на div-блоках с float: совместимо со старыми браузерами -->
+    <div class="page">
+        <!-- Заголовок -->
+        <div class="header">
+            <span class="prompt">></span> <span class="title">fdbtable</span><span class="cursor">_</span>
+            <span class="header-sub">FDB таблицы сетевых коммутаторов</span>
+        </div>
+        <div class="body">
+            <!-- Левая колонка: список коммутаторов -->
+            <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">// КОММУТАТОРЫ</div>
+                    <div class="sort-bar">
+                        <button type="button" class="sort-btn active" data-sort="ip">По IP</button>
+                        <button type="button" class="sort-btn" data-sort="name">По имени</button>
+                    </div>
+                    <ul id="sw-list" class="sw-list">
+                        <li class="sw-empty">Загрузка...</li>
+                    </ul>
+                    <!-- Форма добавления (и редактирования) коммутатора -->
+                    <form id="sw-form" class="sw-form" method="post" action="/api/swinfo/add">
+                        <input type="hidden" name="mac" id="sw-mac" value="">
+                        <input type="hidden" name="location" id="sw-location" value="">
+                        <input type="hidden" name="description" id="sw-description" value="">
+                        <input type="hidden" name="collect_type" id="sw-collect-type" value="">
+                        <input type="text" name="ip" id="sw-ip" placeholder="IP-адрес" required>
+                        <input type="text" name="hostname" id="sw-hostname" placeholder="Имя коммутатора">
+                        <div class="form-buttons">
+                            <button type="submit" id="sw-submit">+ Добавить</button>
+                            <button type="button" class="cancel-btn" id="sw-cancel">Отмена</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Правая, большая колонка: порты выбранного коммутатора -->
+            <div class="content">
+                <div class="panel ports-panel">
+                    <div class="panel-title" id="ports-title">// ПОРТЫ КОММУТАТОРА</div>
+                    <div class="ports-placeholder" id="ports-placeholder">Выберите коммутатор слева</div>
+                    <table class="ports-table" id="ports-table" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Порт</th>
+                                <th>Статус</th>
+                                <th>VLAN</th>
+                                <th>MAC</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ports-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- Футер: копирайт и версия программы -->
+        <div class="footer">
+            <span>&copy; 2026 Sterlikov Kirill</span>
+            <span class="footer-version">fdbtable {{ .version }}</span>
+        </div>
+    </div>
+
+    <script>
+    // Работа со списком коммутаторов и портами.
+    // Без фреймворков: XMLHttpRequest, var, function — совместимо со старыми браузерами.
+    (function () {
+        'use strict';
+
+        var swList = document.getElementById('sw-list');
+        var swForm = document.getElementById('sw-form');
+        var swIp = document.getElementById('sw-ip');
+        var swHostname = document.getElementById('sw-hostname');
+        var swMac = document.getElementById('sw-mac');
+        var swLocation = document.getElementById('sw-location');
+        var swDescription = document.getElementById('sw-description');
+        var swCollectType = document.getElementById('sw-collect-type');
+        var swSubmit = document.getElementById('sw-submit');
+        var swCancel = document.getElementById('sw-cancel');
+        var portsTitle = document.getElementById('ports-title');
+        var portsPlaceholder = document.getElementById('ports-placeholder');
+        var portsTable = document.getElementById('ports-table');
+        var portsBody = document.getElementById('ports-body');
+        var sortBtns = document.getElementsByClassName('sort-btn');
+
+        var switches = [];
+        var currentSort = 'ip';
+        var selectedIp = null;
+
+        // Экранирование HTML-спецсимволов.
+        function escapeHtml(s) {
+            if (s === null || s === undefined) { return ''; }
+            return String(s)
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"');
+        }
+
+        // Сериализация полей формы в строку application/x-www-form-urlencoded.
+        function serializeForm(form) {
+            var parts = [];
+            var els = form.elements;
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (!el.name || el.disabled) { continue; }
+                var type = (el.type || '').toLowerCase();
+                if (type === 'submit' || type === 'button' || type === 'reset') { continue; }
+                if ((type === 'checkbox' || type === 'radio') && !el.checked) { continue; }
+                parts.push(encodeURIComponent(el.name) + '=' + encodeURIComponent(el.value));
+            }
+            return parts.join('&');
+        }
+
+        // Универсальный POST-запрос через XMLHttpRequest (работает в старых браузерах).
+        // callback(ok, resp) — ok: успешен ли запрос, resp: разобранный JSON-ответ.
+        function postForm(url, params, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                var resp = null;
+                try {
+                    resp = JSON.parse(xhr.responseText);
+                } catch (err) {
+                    resp = null;
+                }
+                var ok = (xhr.status >= 200 && xhr.status < 300) && resp && resp.ok;
+                callback(ok, resp || {});
+            };
+            xhr.send(params);
+        }
+
+        // Загрузка списка коммутаторов с сервера.
+        function loadSwitches() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/swinfo', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                if (xhr.status === 200) {
+                    var resp = JSON.parse(xhr.responseText);
+                    switches = resp.switches || [];
+                    renderSwitches();
+                } else {
+                    swList.innerHTML = '<li class="sw-empty">Ошибка загрузки списка</li>';
+                }
+            };
+            xhr.send();
+        }
+
+        // Сортировка списка коммутаторов.
+        function sortSwitches() {
+            switches.sort(function (a, b) {
+                var ka = (currentSort === 'name') ? (a.hostname || '') : (a.ip || '');
+                var kb = (currentSort === 'name') ? (b.hostname || '') : (b.ip || '');
+                ka = ka.toLowerCase();
+                kb = kb.toLowerCase();
+                if (ka < kb) { return -1; }
+                if (ka > kb) { return 1; }
+                return 0;
+            });
+        }
+
+        // Отрисовка списка коммутаторов.
+        function renderSwitches() {
+            sortSwitches();
+            var html = '';
+            for (var i = 0; i < switches.length; i++) {
+                var sw = switches[i];
+                var cls = (sw.ip === selectedIp) ? ' selected' : '';
+                html += '<li class="sw-item' + cls + '" data-ip="' + escapeHtml(sw.ip) + '">'
+                    + '<span class="sw-ip">' + escapeHtml(sw.ip) + '</span>'
+                    + '<span class="sw-name">' + escapeHtml(sw.hostname || '') + '</span>'
+                    + '<span class="sw-actions">'
+                    + '<a href="#" class="sw-edit" title="Изменить">&#9998;</a>'
+                    + '<button type="button" class="sw-del" data-ip="' + escapeHtml(sw.ip) + '" title="Удалить">&#10005;</button>'
+                    + '</span>'
+                    + '</li>';
+            }
+            if (switches.length === 0) {
+                html = '<li class="sw-empty">Коммутаторы не найдены</li>';
+            }
+            swList.innerHTML = html;
+
+            // Клик по элементу списка — выбор коммутатора.
+            var items = swList.getElementsByTagName('li');
+            for (var j = 0; j < items.length; j++) {
+                items[j].onclick = (function (li) {
+                    return function (e) {
+                        var t = e.target || e.srcElement;
+                        if (t.tagName === 'A' || t.tagName === 'BUTTON' || t.tagName === 'FORM' || t.tagName === 'INPUT') {
+                            return;
+                        }
+                        selectSwitch(li.getAttribute('data-ip'));
+                    };
+                })(items[j]);
+            }
+
+            // Клик по значку "изменить".
+            var edits = swList.getElementsByClassName('sw-edit');
+            for (var k = 0; k < edits.length; k++) {
+                edits[k].onclick = (function (a) {
+                    return function (e) {
+                        if (e.preventDefault) { e.preventDefault(); }
+                        startEdit(a.parentNode.parentNode.getAttribute('data-ip'));
+                    };
+                })(edits[k]);
+            }
+
+            // Клик по кнопке "удалить" — AJAX-запрос на удаление.
+            var dels = swList.getElementsByClassName('sw-del');
+            for (var d = 0; d < dels.length; d++) {
+                dels[d].onclick = (function (btn) {
+                    return function (e) {
+                        if (e.preventDefault) { e.preventDefault(); }
+                        var ip = btn.getAttribute('data-ip');
+                        if (!window.confirm('Удалить коммутатор ' + ip + '?')) { return; }
+                        postForm('/api/swinfo/del', 'ip=' + encodeURIComponent(ip), function (ok, resp) {
+                            if (ok) {
+                                if (selectedIp === ip) { selectedIp = null; }
+                                loadSwitches();
+                            } else {
+                                window.alert(resp.error || 'Ошибка удаления коммутатора');
+                            }
+                        });
+                    };
+                })(dels[d]);
+            }
+        }
+
+        // Выбор коммутатора и загрузка его портов.
+        function selectSwitch(ip) {
+            selectedIp = ip;
+            renderSwitches();
+            loadPorts(ip);
+        }
+
+        // Загрузка портов выбранного коммутатора.
+        function loadPorts(ip) {
+            portsTitle.innerHTML = '// ПОРТЫ КОММУТАТОРА: ' + escapeHtml(ip);
+            portsPlaceholder.style.display = 'block';
+            portsPlaceholder.innerHTML = 'Загрузка портов...';
+            portsTable.style.display = 'none';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/ports?ip=' + encodeURIComponent(ip), true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                if (xhr.status === 200) {
+                    var resp = JSON.parse(xhr.responseText);
+                    renderPorts(resp.ports || []);
+                } else {
+                    portsPlaceholder.style.display = 'block';
+                    portsPlaceholder.innerHTML = 'Модуль сбора портов не подключён.';
+                }
+            };
+            xhr.send();
+        }
+
+        // Отрисовка таблицы портов.
+        function renderPorts(ports) {
+            portsPlaceholder.style.display = 'none';
+            portsTable.style.display = 'table';
+            var html = '';
+            for (var i = 0; i < ports.length; i++) {
+                var p = ports[i];
+                html += '<tr>'
+                    + '<td>' + escapeHtml(p.port || '') + '</td>'
+                    + '<td>' + escapeHtml(p.status || '') + '</td>'
+                    + '<td>' + escapeHtml(p.vlan || '') + '</td>'
+                    + '<td>' + escapeHtml(p.mac || '') + '</td>'
+                    + '</tr>';
+            }
+            if (ports.length === 0) {
+                html = '<tr><td colspan="4">Порты не найдены</td></tr>';
+            }
+            portsBody.innerHTML = html;
+        }
+
+        // Редактирование коммутатора: заполняем форму данными и меняем action.
+        function startEdit(ip) {
+            for (var i = 0; i < switches.length; i++) {
+                if (switches[i].ip === ip) {
+                    var sw = switches[i];
+                    swIp.value = sw.ip;
+                    swHostname.value = sw.hostname || '';
+                    swMac.value = sw.mac || '';
+                    swLocation.value = sw.location || '';
+                    swDescription.value = sw.description || '';
+                    swCollectType.value = sw.collect_type || '';
+                    swForm.action = '/api/swinfo/set';
+                    swSubmit.innerHTML = 'Сохранить';
+                    swCancel.style.display = 'block';
+                    break;
+                }
+            }
+        }
+
+        // Отмена редактирования — возврат к режиму добавления.
+        function cancelEdit() {
+            swForm.reset();
+            swForm.action = '/api/swinfo/add';
+            swSubmit.innerHTML = '+ Добавить';
+            swCancel.style.display = 'none';
+        }
+
+        // Кнопки сортировки.
+        for (var s = 0; s < sortBtns.length; s++) {
+            sortBtns[s].onclick = (function (btn) {
+                return function () {
+                    currentSort = btn.getAttribute('data-sort');
+                    for (var t = 0; t < sortBtns.length; t++) {
+                        sortBtns[t].className = 'sort-btn';
+                    }
+                    btn.className = 'sort-btn active';
+                    renderSwitches();
+                };
+            })(sortBtns[s]);
+        }
+
+        swCancel.onclick = cancelEdit;
+
+        // Отправка формы добавления/редактирования через AJAX вместо перехода на страницу.
+        swForm.onsubmit = function (e) {
+            if (e.preventDefault) { e.preventDefault(); }
+            var url = swForm.getAttribute('action') || '/api/swinfo/add';
+            var params = serializeForm(swForm);
+            postForm(url, params, function (ok, resp) {
+                if (ok) {
+                    cancelEdit();
+                    loadSwitches();
+                } else {
+                    window.alert(resp.error || 'Ошибка сохранения коммутатора');
+                }
+            });
+            return false;
+        };
+
+        // Загрузка списка коммутаторов при открытии страницы.
+        loadSwitches();
+    })();
+    </script>
+</body>
+</html>
