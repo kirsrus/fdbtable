@@ -199,22 +199,53 @@ func (w *Worker) delSwInfo(c *gin.Context) {
 }
 
 // collectSwInfo запускает сбор информации с коммутатора.
-// Передаёт команду на сбор воркеру collector через канал и возвращает ответ.
+// Читает полную информацию о коммутаторе из базы данных (за неё отвечает
+// именно web-воркер) и передаёт её воркеру collector через канал,
+// после чего возвращает ответ.
 func (w *Worker) collectSwInfo(c *gin.Context) {
 	ip := getParam(c, "ip")
+	if ip == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "не указан IP-адрес коммутатора"})
+		return
+	}
 
 	w.log.Debug("вызов сбора информации о коммутаторе",
 		slog.String("ip", ip),
 		slog.String("remote_addr", c.ClientIP()),
 	)
 
-	// Передаём команду на сбор информации воркеру collector.
+	// Читаем полную информацию о коммутаторе из базы данных,
+	// чтобы передать воркеру collector все данные о коммутаторе,
+	// а не только IP-адрес.
+	var sw SwInfo
+	err := w.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(swInfoBucket))
+		if b == nil {
+			return errSwNotFound
+		}
+		data := b.Get([]byte(ip))
+		if data == nil {
+			return errSwNotFound
+		}
+		return json.Unmarshal(data, &sw)
+	})
+	if err != nil {
+		if errors.Is(err, errSwNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"ok": false, "error": "коммутатор с таким IP не найден"})
+			return
+		}
+		w.log.Error("ошибка чтения информации о коммутаторе из базы данных", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "ошибка чтения базы данных"})
+		return
+	}
+
+	// Передаём полную информацию о коммутаторе воркеру collector.
 	// Неблокирующая отправка: не задерживаем HTTP-ответ, если collector занят.
 	select {
-	case w.collectCh <- ip:
-		w.log.Info("команда на сбор информации передана воркеру collector", slog.String("ip", ip))
+	case w.collectCh <- sw:
+		w.log.Info("команда на сбор информации передана воркеру collector", slog.String("ip", sw.IP))
 	default:
-		w.log.Warn("воркер collector не готов принять команду на сбор информации", slog.String("ip", ip))
+		w.log.Warn("воркер collector не готов принять команду на сбор информации", slog.String("ip", sw.IP))
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "сбор данных о коммутаторе запущен"})

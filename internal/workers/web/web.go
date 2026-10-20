@@ -19,14 +19,14 @@ type Worker struct {
 	log       *slog.Logger
 	engine    *gin.Engine
 	version   string
-	collectCh chan<- string
+	collectCh chan<- SwInfo
 }
 
 // New создаёт новый воркер web-сервера.
 // Принимает порт, на котором будет работать сервер, базу данных, логгер,
 // версию приложения (пробрасывается в шаблоны) и канал команд на сбор
 // информации с коммутаторов (канал на запись: команды передаются воркеру collector).
-func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan<- string) *Worker {
+func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan<- SwInfo) *Worker {
 	// В production-режиме отключаем debug-вывод gin.
 	gin.SetMode(gin.ReleaseMode)
 

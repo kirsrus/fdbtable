@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/kirsrus/fdbtable/internal/workers/web"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -12,13 +13,13 @@ import (
 type Worker struct {
 	db        *bolt.DB
 	log       *slog.Logger
-	collectCh <-chan string
+	collectCh <-chan web.SwInfo
 }
 
 // New создаёт новый воркер сбора информации.
 // Принимает базу данных, логгер и канал команд на сбор информации
 // (канал на чтение: команды приходят от web-воркера).
-func New(db *bolt.DB, log *slog.Logger, collectCh <-chan string) *Worker {
+func New(db *bolt.DB, log *slog.Logger, collectCh <-chan web.SwInfo) *Worker {
 	return &Worker{
 		db:        db,
 		log:       log,
@@ -36,13 +37,13 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			w.log.Info("воркер сбора информации остановлен")
 			return nil
-		case ip, ok := <-w.collectCh:
+		case sw, ok := <-w.collectCh:
 			if !ok {
 				// Канал закрыт — завершаем работу.
 				w.log.Warn("канал команд закрыт, воркер сбора информации остановлен")
 				return nil
 			}
-			w.log.Debug("получена команда на сбор информации о коммутаторе", slog.String("ip", ip))
+			w.log.Debug("получена команда на сбор информации о коммутаторе", slog.String("ip", sw.IP), slog.String("collect_type", sw.CollectType))
 		}
 	}
 }

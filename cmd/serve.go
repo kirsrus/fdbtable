@@ -82,7 +82,8 @@ var serveCmd = &cobra.Command{
 
 		// Канал команд на сбор информации с коммутаторов.
 		// Web-воркер пишет в него (на запись), воркер collector читает (на чтение).
-		collectCh := make(chan string, 10)
+		// По каналу передаётся полная информация о коммутаторе (SwInfo).
+		collectCh := make(chan web.SwInfo, 10)
 
 		// Список воркеров приложения.
 		workersList := []workers.Worker{
