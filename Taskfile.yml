@@ -1,0 +1,45 @@
+---
+version: "3"
+
+vars:
+  GIT_VERSION:
+    sh: git describe --abbrev=0 --tags
+
+tasks:
+
+  clean:
+    cmds:
+      - cmd: rm -f -R build
+        ignore_error: true
+
+  run:
+    env:
+      CGO_ENABLED: 1
+      GODEBUG: cgocheck=0
+    cmds:
+      - go run -ldflags "-X github.com/kirsrus/fdbtable/cmd.version={{.GIT_VERSION}}" --race -v main.go
+
+  build:
+    deps: [clean]
+    cmds:
+      - cmd: mkdir build
+        ignore_error: true
+      - task: build_windows
+      - task: build_linux
+
+  build_windows:
+    env:
+      GOARCH: amd64
+      GOOS: windows
+      GODEBUG: cgocheck=0
+    cmds:
+      - go build -ldflags "-X github.com/kirsrus/fdbtable/cmd.version={{.GIT_VERSION}}" -v -o build/fdbtable.exe main.go
+
+  build_linux:
+    env:
+      GOARCH: amd64
+      GOOS: linux
+      GODEBUG: cgocheck=0
+    cmds:
+      - go build -ldflags "-X github.com/kirsrus/fdbtable/cmd.version={{.GIT_VERSION}}" -v -o build/fdbtable main.go
+
