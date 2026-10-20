@@ -179,8 +179,9 @@
                     + '<span class="sw-ip">' + escapeHtml(sw.ip) + '</span>'
                     + '<span class="sw-name">' + escapeHtml(sw.hostname || '') + '</span>'
                     + '<span class="sw-actions">'
-                    + '<a href="#" class="sw-edit" title="Изменить">&#9998;</a>'
                     + '<button type="button" class="sw-del" data-ip="' + escapeHtml(sw.ip) + '" title="Удалить">&#10005;</button>'
+                    + '<a href="#" class="sw-edit" title="Изменить">&#9998;</a>'
+                    + '<button type="button" class="sw-refresh" data-ip="' + escapeHtml(sw.ip) + '" title="Обновить информацию">&#8635;</button>'
                     + '</span>'
                     + '</li>';
             }
@@ -232,6 +233,25 @@
                         });
                     };
                 })(dels[d]);
+            }
+
+            // Клик по кнопке "обновить информацию" — запуск сбора данных с коммутатора.
+            var refreshes = swList.getElementsByClassName('sw-refresh');
+            for (var r = 0; r < refreshes.length; r++) {
+                refreshes[r].onclick = (function (btn) {
+                    return function (e) {
+                        if (e.preventDefault) { e.preventDefault(); }
+                        var ip = btn.getAttribute('data-ip');
+                        postForm('/api/swinfo/collect', 'ip=' + encodeURIComponent(ip), function (ok, resp) {
+                            if (ok) {
+                                // После сбора перезагружаем порты выбранного коммутатора.
+                                loadPorts(ip);
+                            } else {
+                                window.alert(resp.error || 'Ошибка запуска сбора данных о коммутаторе');
+                            }
+                        });
+                    };
+                })(refreshes[r]);
             }
         }
 

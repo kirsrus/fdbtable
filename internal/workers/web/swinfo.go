@@ -41,12 +41,13 @@ type SwInfo struct {
 // Для совместимости со старыми браузерами и отсутствия web-фреймворков
 // используются максимально простые конструкции обращения:
 //   - getSwInfo — GET, доступен из простой ссылки или формы с method="GET";
-//   - setSwInfo, addSwInfo, delSwInfo — POST, вызываются из формы с method="POST".
+//   - setSwInfo, addSwInfo, delSwInfo, collectSwInfo — POST, вызываются из формы с method="POST".
 func (w *Worker) registerSwInfoRoutes() {
 	w.engine.GET("/api/swinfo", w.getSwInfo)
 	w.engine.POST("/api/swinfo/set", w.setSwInfo)
 	w.engine.POST("/api/swinfo/add", w.addSwInfo)
 	w.engine.POST("/api/swinfo/del", w.delSwInfo)
+	w.engine.POST("/api/swinfo/collect", w.collectSwInfo)
 }
 
 // getSwInfo возвращает информацию о коммутаторах в формате JSON.
@@ -195,6 +196,19 @@ func (w *Worker) delSwInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "коммутатор удалён"})
+}
+
+// collectSwInfo запускает сбор информации с коммутатора.
+// Пока это заглушка: только логирует факт вызова и переданные параметры.
+func (w *Worker) collectSwInfo(c *gin.Context) {
+	ip := getParam(c, "ip")
+
+	w.log.Info("вызов сбора информации о коммутаторе",
+		slog.String("ip", ip),
+		slog.String("remote_addr", c.ClientIP()),
+	)
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "сбор данных о коммутаторе запущен"})
 }
 
 // parseSwInfo разбирает параметры коммутатора из формы или query-строки.

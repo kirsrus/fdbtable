@@ -157,6 +157,9 @@ html, body {
 .sw-actions button:hover {
     color: #d64545;
 }
+.sw-actions .sw-refresh:hover {
+    color: #0077b6;
+}
 .sw-empty {
     color: #6b7280;
     padding: 10px 8px;
