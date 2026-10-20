@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/kirsrus/fdbtable/internal/colorlog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -15,12 +17,14 @@ const copyright = "Copyright (c) 2026 Sterlikov Kirill"
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Запуск сервера",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Инициализация цветного логирования.
 		slog.SetDefault(slog.New(colorlog.New(os.Stderr, slog.LevelDebug)))
 
 		// Информация о программе.
-		slog.Info("fdbtable", "copyright", copyright, "version", version)
+		slog.Info("fdbtable started", "copyright", copyright, "version", version)
+
+		return errors.WithStack(fmt.Errorf("тестовая ошибка"))
 	},
 }
 
