@@ -26,8 +26,29 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Запуск сервера",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Уровень логирования из флага --level.
+		levelStr, err := cmd.Flags().GetString("level")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		// Уровень логирования по умолчанию — info.
+		level := slog.LevelInfo
+		switch levelStr {
+		case "debug":
+			level = slog.LevelDebug
+		case "info":
+			level = slog.LevelInfo
+		case "warn":
+			level = slog.LevelWarn
+		case "error":
+			level = slog.LevelError
+		default:
+			return errors.WithStack(fmt.Errorf("неизвестный уровень логирования %q: допустимые значения debug|info|warn|error", levelStr))
+		}
+
 		// Инициализация цветного логирования.
-		slog.SetDefault(slog.New(colorlog.New(os.Stderr, slog.LevelDebug)))
+		slog.SetDefault(slog.New(colorlog.New(os.Stderr, level)))
 
 		// Информация о программе.
 		slog.Info("<--- fdbtable стартовал", "copyright", copyright, "version", version)
@@ -107,5 +128,7 @@ func init() {
 	serveCmd.Flags().String("db", "database.bolt", "путь к файлу базы данных bolt")
 	// Флаг порта web-сервера.
 	serveCmd.Flags().Int("port", 8080, "порт web-сервера")
+	// Флаг уровня логирования
+	serveCmd.Flags().String("level", "info", "уровень логирования debug|info|warn|error")
 	rootCmd.AddCommand(serveCmd)
 }
