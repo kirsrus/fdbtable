@@ -199,14 +199,23 @@ func (w *Worker) delSwInfo(c *gin.Context) {
 }
 
 // collectSwInfo запускает сбор информации с коммутатора.
-// Пока это заглушка: только логирует факт вызова и переданные параметры.
+// Передаёт команду на сбор воркеру collector через канал и возвращает ответ.
 func (w *Worker) collectSwInfo(c *gin.Context) {
 	ip := getParam(c, "ip")
 
-	w.log.Info("вызов сбора информации о коммутаторе",
+	w.log.Debug("вызов сбора информации о коммутаторе",
 		slog.String("ip", ip),
 		slog.String("remote_addr", c.ClientIP()),
 	)
+
+	// Передаём команду на сбор информации воркеру collector.
+	// Неблокирующая отправка: не задерживаем HTTP-ответ, если collector занят.
+	select {
+	case w.collectCh <- ip:
+		w.log.Info("команда на сбор информации передана воркеру collector", slog.String("ip", ip))
+	default:
+		w.log.Warn("воркер collector не готов принять команду на сбор информации", slog.String("ip", ip))
+	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "сбор данных о коммутаторе запущен"})
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kirsrus/fdbtable/internal/colorlog"
 	"github.com/kirsrus/fdbtable/internal/workers"
+	"github.com/kirsrus/fdbtable/internal/workers/collector"
 	"github.com/kirsrus/fdbtable/internal/workers/web"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -58,10 +59,18 @@ var serveCmd = &cobra.Command{
 		// Группа воркеров: если один вернёт ошибку, остальные будут остановлены.
 		g, gctx := errgroup.WithContext(ctx)
 
+		// Канал команд на сбор информации с коммутаторов.
+		// Web-воркер пишет в него (на запись), воркер collector читает (на чтение).
+		collectCh := make(chan string, 10)
+
 		// Список воркеров приложения.
 		workersList := []workers.Worker{
-			// Воркер web-сервера. Пробрасываем порт, базу данных, логгер и версию.
-			web.New(port, db, slog.Default(), version),
+			// Воркер web-сервера. Пробрасываем порт, базу данных, логгер, версию
+			// и канал команд на сбор информации (на запись).
+			web.New(port, db, slog.Default(), version, collectCh),
+			// Воркер сбора информации с коммутаторов. Пробрасываем базу данных,
+			// логгер и канал команд на сбор информации (на чтение).
+			collector.New(db, slog.Default(), collectCh),
 		}
 
 		// Запуск всех воркеров.

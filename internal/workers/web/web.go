@@ -14,17 +14,19 @@ import (
 
 // Worker — воркер web-сервера.
 type Worker struct {
-	port    int
-	db      *bolt.DB
-	log     *slog.Logger
-	engine  *gin.Engine
-	version string
+	port      int
+	db        *bolt.DB
+	log       *slog.Logger
+	engine    *gin.Engine
+	version   string
+	collectCh chan<- string
 }
 
 // New создаёт новый воркер web-сервера.
-// Принимает порт, на котором будет работать сервер, базу данных, логгер
-// и версию приложения (пробрасывается в шаблоны).
-func New(port int, db *bolt.DB, log *slog.Logger, version string) *Worker {
+// Принимает порт, на котором будет работать сервер, базу данных, логгер,
+// версию приложения (пробрасывается в шаблоны) и канал команд на сбор
+// информации с коммутаторов (канал на запись: команды передаются воркеру collector).
+func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan<- string) *Worker {
 	// В production-режиме отключаем debug-вывод gin.
 	gin.SetMode(gin.ReleaseMode)
 
@@ -46,11 +48,12 @@ func New(port int, db *bolt.DB, log *slog.Logger, version string) *Worker {
 	})
 
 	w := &Worker{
-		port:    port,
-		db:      db,
-		log:     log,
-		engine:  engine,
-		version: version,
+		port:      port,
+		db:        db,
+		log:       log,
+		engine:    engine,
+		version:   version,
+		collectCh: collectCh,
 	}
 
 	// Регистрация маршрутов управления информацией о коммутаторах.
