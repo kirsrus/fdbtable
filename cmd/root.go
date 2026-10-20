@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -37,6 +38,12 @@ func Execute() {
 				d, f := filepath.Split(fmt.Sprintf("%+s", s))
 				l := fmt.Sprintf("%s:%s", filepath.Join(filepath.Base(d), f), fmt.Sprintf("%d", s))
 				l = strings.ReplaceAll(l, "\\", "/")
+
+				// Пропускаем неинформативные точки strace
+				if strings.HasPrefix(l, "runtime/") || strings.HasPrefix(l, "cobra@") {
+					continue
+				}
+
 				trace = append(trace, l)
 			}
 			slog.Error(fmt.Sprintf("работа программы завершена с ошибкой: %v", err), slog.String("stacktrace", strings.Join(trace, " ")))
@@ -44,7 +51,7 @@ func Execute() {
 			slog.Error(err.Error())
 		}
 
-		// os.Exit(1)
+		os.Exit(1)
 	}
 }
 
