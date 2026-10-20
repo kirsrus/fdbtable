@@ -8,6 +8,7 @@ import (
 	"github.com/kirsrus/fdbtable/internal/colorlog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	bolt "go.etcd.io/bbolt"
 )
 
 // copyright — копирайт приложения.
@@ -24,10 +25,26 @@ var serveCmd = &cobra.Command{
 		// Информация о программе.
 		slog.Info("fdbtable started", "copyright", copyright, "version", version)
 
-		return errors.WithStack(fmt.Errorf("тестовая ошибка"))
+		// Путь к файлу базы данных из флага --db.
+		dbPath, err := cmd.Flags().GetString("db")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		// Инициализация базы данных bbolt.
+		db, err := bolt.Open(dbPath, 0600, nil)
+		if err != nil {
+			return errors.WithStack(fmt.Errorf("не удалось открыть базу данных %q: %w", dbPath, err))
+		}
+		defer db.Close()
+		slog.Info("открыта база данных", slog.String("database", dbPath))
+
+		return nil
 	},
 }
 
 func init() {
+	// Флаг пути к файлу базы данных.
+	serveCmd.Flags().String("db", "database.bolt", "путь к файлу базы данных bolt")
 	rootCmd.AddCommand(serveCmd)
 }

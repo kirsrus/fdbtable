@@ -55,11 +55,6 @@ func Execute() {
 	}
 }
 
-func init() {
-	// Глобальные флаги, доступные всем подкомандам.
-	rootCmd.PersistentFlags().String("db", "database.bolt", "путь к файлу базы данных bolt")
-}
-
 type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
