@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/kirsrus/fdbtable/internal/model"
-	"github.com/kirsrus/fdbtable/internal/workers/web"
 )
 
 func init() {
@@ -35,7 +34,7 @@ func (c *SNMPCollector) Name() string {
 // Collect выполняет сбор информации с коммутатора по SNMP (заглушка).
 // Принимает контекст для отмены и таймаута сбора, полную информацию
 // о коммутаторе из очереди заданий и возвращает собранную модель.
-func (c *SNMPCollector) Collect(ctx context.Context, sw web.SwInfo) (model.Switch, error) {
+func (c *SNMPCollector) Collect(ctx context.Context, sw model.SwInfo) (model.Switch, error) {
 	// TODO: реализовать опрос коммутатора по SNMP. Для специализированных
 	// типов (например, SNMP_Cisco) выполнять опрос по профилю производителя.
 	// Пока — общая заглушка базового типа.

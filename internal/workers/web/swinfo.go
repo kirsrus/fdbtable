@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kirsrus/fdbtable/internal/model"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -20,21 +21,6 @@ var (
 	errSwNotFound = errors.New("коммутатор не найден")
 	errSwExists   = errors.New("коммутатор уже существует")
 )
-
-// SwInfo — информация о сетевом коммутаторе.
-type SwInfo struct {
-	IP          string `json:"ip"`
-	MAC         string `json:"mac"`
-	Hostname    string `json:"hostname"`
-	Location    string `json:"location"`
-	Description string `json:"description"`
-	// CollectType — тип сбора информации о коммутаторе.
-	// Хранится в текстовом виде: базовые типы (SNMP, SSH, WEB) или
-	// персонализированные (например, SNMP_Cisco, SNMP_Eltex_MAS3032,
-	// WEB_Rujio_808P_v433). Текстовое хранение позволяет добавлять
-	// новые значения в середину списка без перенумерации.
-	CollectType string `json:"collect_type"`
-}
 
 // registerSwInfoRoutes регистрирует маршруты управления информацией о коммутаторах.
 //
@@ -55,7 +41,7 @@ func (w *Worker) registerSwInfoRoutes() {
 func (w *Worker) getSwInfo(c *gin.Context) {
 	ip := c.Query("ip")
 
-	switches := make([]SwInfo, 0)
+	switches := make([]model.SwInfo, 0)
 	err := w.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(swInfoBucket))
 		if b == nil {
@@ -69,7 +55,7 @@ func (w *Worker) getSwInfo(c *gin.Context) {
 			if data == nil {
 				return nil
 			}
-			var sw SwInfo
+			var sw model.SwInfo
 			if err := json.Unmarshal(data, &sw); err != nil {
 				return err
 			}
@@ -79,7 +65,7 @@ func (w *Worker) getSwInfo(c *gin.Context) {
 
 		// Иначе возвращаем все коммутаторы.
 		return b.ForEach(func(k, v []byte) error {
-			var sw SwInfo
+			var sw model.SwInfo
 			if err := json.Unmarshal(v, &sw); err != nil {
 				return err
 			}
@@ -217,7 +203,7 @@ func (w *Worker) collectSwInfo(c *gin.Context) {
 	// Читаем полную информацию о коммутаторе из базы данных,
 	// чтобы передать воркеру collector все данные о коммутаторе,
 	// а не только IP-адрес.
-	var sw SwInfo
+	var sw model.SwInfo
 	err := w.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(swInfoBucket))
 		if b == nil {
@@ -252,8 +238,8 @@ func (w *Worker) collectSwInfo(c *gin.Context) {
 }
 
 // parseSwInfo разбирает параметры коммутатора из формы или query-строки.
-func (w *Worker) parseSwInfo(c *gin.Context) (SwInfo, error) {
-	sw := SwInfo{
+func (w *Worker) parseSwInfo(c *gin.Context) (model.SwInfo, error) {
+	sw := model.SwInfo{
 		IP:          getParam(c, "ip"),
 		MAC:         getParam(c, "mac"),
 		Hostname:    getParam(c, "hostname"),

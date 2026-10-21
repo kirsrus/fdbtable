@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/kirsrus/fdbtable/internal/model"
-	"github.com/kirsrus/fdbtable/internal/workers/web"
 )
 
 func init() {
@@ -35,7 +34,7 @@ func (c *WebCollector) Name() string {
 // Collect выполняет сбор информации с коммутатора через его WEB-интерфейс
 // (заглушка). Принимает контекст для отмены и таймаута сбора, полную
 // информацию о коммутаторе из очереди заданий и возвращает собранную модель.
-func (c *WebCollector) Collect(ctx context.Context, sw web.SwInfo) (model.Switch, error) {
+func (c *WebCollector) Collect(ctx context.Context, sw model.SwInfo) (model.Switch, error) {
 	// TODO: реализовать загрузку страниц WEB-интерфейса и парсинг данных.
 	// Для специализированных типов (например, WEB_Rujio_808P_v433) парсить
 	// страницы по профилю производителя. Пока — общая заглушка базового типа.

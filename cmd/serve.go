@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/kirsrus/fdbtable/internal/colorlog"
+	"github.com/kirsrus/fdbtable/internal/model"
 	"github.com/kirsrus/fdbtable/internal/workers"
 	"github.com/kirsrus/fdbtable/internal/workers/collector"
 	"github.com/kirsrus/fdbtable/internal/workers/web"
@@ -89,7 +90,7 @@ var serveCmd = &cobra.Command{
 		// Канал команд на сбор информации с коммутаторов.
 		// Web-воркер пишет в него (на запись), воркер collector читает (на чтение).
 		// По каналу передаётся полная информация о коммутаторе (SwInfo).
-		collectCh := make(chan web.SwInfo, 10)
+		collectCh := make(chan model.SwInfo, 10)
 
 		// Список воркеров приложения.
 		workersList := []workers.Worker{

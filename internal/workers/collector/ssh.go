@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/kirsrus/fdbtable/internal/model"
-	"github.com/kirsrus/fdbtable/internal/workers/web"
 )
 
 func init() {
@@ -35,7 +34,7 @@ func (c *SSHCollector) Name() string {
 // Collect выполняет сбор информации с коммутатора через SSH (заглушка).
 // Принимает контекст для отмены и таймаута сбора, полную информацию
 // о коммутаторе из очереди заданий и возвращает собранную модель.
-func (c *SSHCollector) Collect(ctx context.Context, sw web.SwInfo) (model.Switch, error) {
+func (c *SSHCollector) Collect(ctx context.Context, sw model.SwInfo) (model.Switch, error) {
 	// TODO: реализовать подключение по SSH и парсинг вывода команд.
 	// Для специализированных типов (например, SSH_AllietTelesis_908) парсить
 	// вывод по профилю производителя. Пока — общая заглушка базового типа.

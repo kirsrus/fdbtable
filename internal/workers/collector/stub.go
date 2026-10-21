@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kirsrus/fdbtable/internal/model"
-	"github.com/kirsrus/fdbtable/internal/workers/web"
 )
 
 // stubCollectDelay — задержка, эмулирующая время реального сбора данных
@@ -30,7 +29,7 @@ func waitStub(ctx context.Context) error {
 // stubSwitch формирует модель коммутатора для заглушечных реализаций.
 // Заполняет базовые поля из информации о коммутаторе, пришедшей в очереди
 // заданий. Реальные реализации будут заполнять поля данными опроса.
-func stubSwitch(sw web.SwInfo) model.Switch {
+func stubSwitch(sw model.SwInfo) model.Switch {
 	return model.Switch{
 		IP:          sw.IP,
 		MAC:         sw.MAC,

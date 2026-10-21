@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kirsrus/fdbtable/internal/workers/web"
+	"github.com/kirsrus/fdbtable/internal/model"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
 )
@@ -20,7 +20,7 @@ const collectJobsBuffer = 10
 type Worker struct {
 	db           *bolt.DB
 	log          *slog.Logger
-	collectCh    <-chan web.SwInfo
+	collectCh    <-chan model.SwInfo
 	workersCount int
 
 	// collectTimeout — таймаут сбора информации с одного коммутатора.
@@ -33,7 +33,7 @@ type Worker struct {
 	// IP-адресу коммутатора: одновременно может обрабатываться (находиться
 	// в очереди или выполняться воркером) только одна задача по каждому IP.
 	// Задачи в очередь кладёт диспетчер, а выполняют внутренние воркеры.
-	collectJobs chan web.SwInfo
+	collectJobs chan model.SwInfo
 
 	// mu защищает jobIPs от одновременного доступа диспетчера и воркеров.
 	mu     sync.Mutex
@@ -44,13 +44,13 @@ type Worker struct {
 // Принимает базу данных, логгер, канал команд на сбор информации
 // (канал на чтение: команды приходят от web-воркера) и количество
 // внутренних воркеров, выполняющих сбор данных с коммутаторов.
-func New(db *bolt.DB, log *slog.Logger, collectCh <-chan web.SwInfo, workersCount int) *Worker {
+func New(db *bolt.DB, log *slog.Logger, collectCh <-chan model.SwInfo, workersCount int) *Worker {
 	return &Worker{
 		db:             db,
 		log:            log,
 		collectCh:      collectCh,
 		workersCount:   workersCount,
-		collectJobs:    make(chan web.SwInfo, collectJobsBuffer),
+		collectJobs:    make(chan model.SwInfo, collectJobsBuffer),
 		jobIPs:         make(map[string]struct{}),
 		collectTimeout: DefaultCollectTimeout,
 	}
@@ -166,7 +166,7 @@ func (w *Worker) collect(ctx context.Context, id int) error {
 // SSH_AllietTelesis_908 и т.п.). Перед вызовом реализации накладывается
 // таймаут (по умолчанию collectTimeout — 5 минут), а отмена ctx останавливает
 // сбор при завершении работы воркера.
-func (w *Worker) collectSw(ctx context.Context, id int, sw web.SwInfo) {
+func (w *Worker) collectSw(ctx context.Context, id int, sw model.SwInfo) {
 	w.log.Info("запущен сбор данных с коммутатора",
 		slog.Int("worker", id),
 		slog.String("ip", sw.IP),

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kirsrus/fdbtable/internal/model"
-	"github.com/kirsrus/fdbtable/internal/workers/web"
 )
 
 // Базовые типы сбора информации с коммутаторов.
@@ -54,7 +53,7 @@ type Collector interface {
 	// ctx позволяет отменить сбор (отмена родительского контекста) или
 	// завершить его по таймауту (по умолчанию DefaultCollectTimeout).
 	// sw содержит всю информацию о коммутаторе из очереди заданий.
-	Collect(ctx context.Context, sw web.SwInfo) (model.Switch, error)
+	Collect(ctx context.Context, sw model.SwInfo) (model.Switch, error)
 }
 
 // registry — реестр реализаций сбора информации, ключом служит
