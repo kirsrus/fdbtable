@@ -255,6 +255,12 @@ func (w *Worker) parseSwInfo(c *gin.Context) (model.SwInfo, error) {
 		return sw, errors.New("некорректный IP-адрес коммутатора")
 	}
 
+	// Тип сбора должен принадлежать коллекции допустимых типов (model.CollectTypes).
+	// Сравнение регистронезависимое: типы могут добавляться в разных регистрах.
+	if sw.CollectType != "" && !model.CollectType(sw.CollectType).IsValid() {
+		return sw, errors.New("недопустимый тип сбора информации о коммутаторе")
+	}
+
 	return sw, nil
 }
 

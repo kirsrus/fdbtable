@@ -45,6 +45,9 @@ func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"title":   "fdbtable",
 			"version": version,
+			// Коллекция допустимых типов сбора информации о коммутаторе.
+			// Подставляется в выпадающий список формы добавления/редактирования.
+			"collectTypes": model.CollectTypes,
 		})
 	})
 

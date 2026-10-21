@@ -28,12 +28,18 @@
                     </ul>
                     <!-- Форма добавления (и редактирования) коммутатора -->
                     <form id="sw-form" class="sw-form" method="post" action="/api/swinfo/add">
-                        <input type="hidden" name="mac" id="sw-mac" value="">
-                        <input type="hidden" name="location" id="sw-location" value="">
-                        <input type="hidden" name="description" id="sw-description" value="">
-                        <input type="hidden" name="collect_type" id="sw-collect-type" value="">
                         <input type="text" name="ip" id="sw-ip" placeholder="IP-адрес" required>
                         <input type="text" name="hostname" id="sw-hostname" placeholder="Имя коммутатора">
+                        <input type="text" name="mac" id="sw-mac" placeholder="MAC-адрес">
+                        <input type="text" name="location" id="sw-location" placeholder="Местоположение">
+                        <input type="text" name="description" id="sw-description" placeholder="Описание">
+                        <!-- Тип сбора — фиксированный список из коллекции model.CollectTypes.
+                             Пользователь не может ввести произвольное значение. -->
+                        <select name="collect_type" id="sw-collect-type">
+                            {{ range .collectTypes }}
+                            <option value="{{ . }}">{{ . }}</option>
+                            {{ end }}
+                        </select>
                         <div class="form-buttons">
                             <button type="submit" id="sw-submit">+ Добавить</button>
                             <button type="button" class="cancel-btn" id="sw-cancel">Отмена</button>
@@ -314,6 +320,8 @@
                     swMac.value = sw.mac || '';
                     swLocation.value = sw.location || '';
                     swDescription.value = sw.description || '';
+                    // Для select установка value выбирает совпадающий вариант.
+                    // Если сохранённый тип отсутствует в списке, остаётся первый вариант.
                     swCollectType.value = sw.collect_type || '';
                     swForm.action = '/api/swinfo/set';
                     swSubmit.innerHTML = 'Сохранить';

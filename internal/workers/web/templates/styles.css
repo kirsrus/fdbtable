@@ -171,7 +171,8 @@ html, body {
     padding: 8px;
     border-top: 1px solid #c3ccd6;
 }
-.sw-form input[type="text"] {
+.sw-form input[type="text"],
+.sw-form select {
     width: 100%;
     box-sizing: border-box;
     background: #ffffff;
@@ -181,7 +182,8 @@ html, body {
     margin-bottom: 6px;
     font-family: inherit;
 }
-.sw-form input[type="text"]:focus {
+.sw-form input[type="text"]:focus,
+.sw-form select:focus {
     border-color: #00a86b;
     outline: none;
 }
