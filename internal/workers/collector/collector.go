@@ -23,6 +23,12 @@ type Worker struct {
 	collectCh    <-chan web.SwInfo
 	workersCount int
 
+	// collectTimeout — таймаут сбора информации с одного коммутатора.
+	// По умолчанию DefaultCollectTimeout (5 минут). Ограничивает время сбора,
+	// чтобы зависший опрос (например, при отказе оборудования) не блокировал
+	// воркера. Накладывается на контекст выполнения реализации сбора.
+	collectTimeout time.Duration
+
 	// collectJobs — очередь задач на сбор информации. Дедуплицируется по
 	// IP-адресу коммутатора: одновременно может обрабатываться (находиться
 	// в очереди или выполняться воркером) только одна задача по каждому IP.
@@ -40,12 +46,13 @@ type Worker struct {
 // внутренних воркеров, выполняющих сбор данных с коммутаторов.
 func New(db *bolt.DB, log *slog.Logger, collectCh <-chan web.SwInfo, workersCount int) *Worker {
 	return &Worker{
-		db:           db,
-		log:          log,
-		collectCh:    collectCh,
-		workersCount: workersCount,
-		collectJobs:  make(chan web.SwInfo, collectJobsBuffer),
-		jobIPs:       make(map[string]struct{}),
+		db:             db,
+		log:            log,
+		collectCh:      collectCh,
+		workersCount:   workersCount,
+		collectJobs:    make(chan web.SwInfo, collectJobsBuffer),
+		jobIPs:         make(map[string]struct{}),
+		collectTimeout: DefaultCollectTimeout,
 	}
 }
 
@@ -124,8 +131,8 @@ func (w *Worker) dispatch(ctx context.Context) error {
 }
 
 // collect — внутренний воркер сбора данных.
-// Ожидает задачи из очереди collectJobs и собирает информацию с коммутатора.
-// Пока это заглушка: логирует запуск сбора данных с коммутатора по его методу.
+// Ожидает задачи из очереди collectJobs и собирает информацию с коммутатора
+// выбранной по типу сбора реализацией.
 func (w *Worker) collect(ctx context.Context, id int) error {
 	w.log.Debug("внутренний воркер сбора данных запущен", slog.Int("worker", id))
 
@@ -141,27 +148,62 @@ func (w *Worker) collect(ctx context.Context, id int) error {
 				return nil
 			}
 
-			// Заглушка: реальный сбор информации будет реализован позже.
-			w.log.Info("запущен сбор данных с коммутатора",
-				slog.Int("worker", id),
-				slog.String("ip", sw.IP),
-				slog.String("method", sw.CollectType),
-			)
+			// Собираем информацию с коммутатора.
+			w.collectSw(ctx, id, sw)
 
-			// Эмулируем задержки.
-			time.Sleep(time.Second * 15)
-
-			// Снимаем пометку об IP-адресе: сбор данных с коммутатора
-			// завершён, и по этому IP можно снова ставить задачи в очередь.
+			// Снимаем пометку об IP-адресе: обработка задачи завершена,
+			// и по этому IP можно снова ставить задачи в очередь.
 			w.mu.Lock()
 			delete(w.jobIPs, sw.IP)
 			w.mu.Unlock()
-
-			w.log.Info("сбор данных с коммутатора завершон",
-				slog.Int("worker", id),
-				slog.String("ip", sw.IP),
-				slog.String("method", sw.CollectType),
-			)
 		}
 	}
+}
+
+// collectSw собирает информацию с одного коммутатора.
+// Реализация сбора выбирается по типу сбора из очереди заданий (sw.CollectType):
+// базовая (SNMP, SSH, WEB) или специализированная (SNMP_Cisco,
+// SSH_AllietTelesis_908 и т.п.). Перед вызовом реализации накладывается
+// таймаут (по умолчанию collectTimeout — 5 минут), а отмена ctx останавливает
+// сбор при завершении работы воркера.
+func (w *Worker) collectSw(ctx context.Context, id int, sw web.SwInfo) {
+	w.log.Info("запущен сбор данных с коммутатора",
+		slog.Int("worker", id),
+		slog.String("ip", sw.IP),
+		slog.String("method", sw.CollectType),
+	)
+
+	collector, err := NewCollector(sw.CollectType)
+	if err != nil {
+		w.log.Error("не удалось выбрать реализацию сбора данных",
+			slog.Int("worker", id),
+			slog.String("ip", sw.IP),
+			slog.String("method", sw.CollectType),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	// Ограничиваем время сбора информации с коммутатора таймаутом
+	// (по умолчанию 5 минут) с возможностью отмены извне.
+	collectCtx, cancel := context.WithTimeout(ctx, w.collectTimeout)
+	defer cancel()
+
+	result, err := collector.Collect(collectCtx, sw)
+	if err != nil {
+		w.log.Error("сбор данных с коммутатора завершён с ошибкой",
+			slog.Int("worker", id),
+			slog.String("ip", sw.IP),
+			slog.String("method", sw.CollectType),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	w.log.Info("сбор данных с коммутатора завершён",
+		slog.Int("worker", id),
+		slog.String("ip", result.IP),
+		slog.String("method", sw.CollectType),
+		slog.Int("ports_count", len(result.Ports)),
+	)
 }
