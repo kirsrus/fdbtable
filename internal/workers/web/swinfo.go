@@ -291,6 +291,8 @@ func (w *Worker) parseSwInfo(c *gin.Context) (model.SwInfo, error) {
 		Location:    getParam(c, "location"),
 		Description: getParam(c, "description"),
 		CollectType: getParam(c, "collect_type"),
+		Username:    getParam(c, "username"),
+		Password:    getParam(c, "password"),
 	}
 
 	if sw.IP == "" {

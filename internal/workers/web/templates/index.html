@@ -33,6 +33,8 @@
                         <input type="text" name="mac" id="sw-mac" placeholder="MAC-адрес">
                         <input type="text" name="location" id="sw-location" placeholder="Местоположение">
                         <input type="text" name="description" id="sw-description" placeholder="Описание">
+                        <input type="text" name="username" id="sw-username" placeholder="Имя пользователя">
+                        <input type="password" name="password" id="sw-password" placeholder="Пароль">
                         <!-- Тип сбора — фиксированный список из коллекции model.CollectTypes.
                              Пользователь не может ввести произвольное значение. -->
                         <select name="collect_type" id="sw-collect-type">
@@ -95,6 +97,8 @@
         var swMac = document.getElementById('sw-mac');
         var swLocation = document.getElementById('sw-location');
         var swDescription = document.getElementById('sw-description');
+        var swUsername = document.getElementById('sw-username');
+        var swPassword = document.getElementById('sw-password');
         var swCollectType = document.getElementById('sw-collect-type');
         var swSubmit = document.getElementById('sw-submit');
         var swCancel = document.getElementById('sw-cancel');
@@ -454,6 +458,8 @@
                     swMac.value = sw.mac || '';
                     swLocation.value = sw.location || '';
                     swDescription.value = sw.description || '';
+                    swUsername.value = sw.username || '';
+                    swPassword.value = sw.password || '';
                     // Для select установка value выбирает совпадающий вариант.
                     // Если сохранённый тип отсутствует в списке, остаётся первый вариант.
                     swCollectType.value = sw.collect_type || '';

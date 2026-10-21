@@ -16,4 +16,6 @@ type SwInfo struct {
 	// WEB_Rujio_808P_v433). Текстовое хранение позволяет добавлять
 	// новые значения в середину списка без перенумерации.
 	CollectType string `json:"collect_type"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
 }

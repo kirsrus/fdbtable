@@ -189,6 +189,7 @@ html, body {
     border-top: 1px solid #c3ccd6;
 }
 .sw-form input[type="text"],
+.sw-form input[type="password"],
 .sw-form select {
     width: 100%;
     box-sizing: border-box;
@@ -200,6 +201,7 @@ html, body {
     font-family: inherit;
 }
 .sw-form input[type="text"]:focus,
+.sw-form input[type="password"]:focus,
 .sw-form select:focus {
     border-color: #00a86b;
     outline: none;
