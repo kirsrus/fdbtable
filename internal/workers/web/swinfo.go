@@ -243,7 +243,7 @@ func (w *Worker) collectSwInfo(c *gin.Context) {
 	// Неблокирующая отправка: не задерживаем HTTP-ответ, если collector занят.
 	select {
 	case w.collectCh <- sw:
-		w.log.Info("команда на сбор информации передана воркеру collector", slog.String("ip", sw.IP))
+		w.log.Debug("команда на сбор информации передана воркеру collector", slog.String("ip", sw.IP))
 	default:
 		w.log.Warn("воркер collector не готов принять команду на сбор информации", slog.String("ip", sw.IP))
 	}

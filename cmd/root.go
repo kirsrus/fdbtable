@@ -53,6 +53,7 @@ func Execute() {
 
 		os.Exit(1)
 	}
+	slog.Info("программа штатно завершила работу")
 }
 
 type stackTracer interface {

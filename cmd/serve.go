@@ -73,6 +73,12 @@ var serveCmd = &cobra.Command{
 			return errors.WithStack(err)
 		}
 
+		// Количество внутренних воркеров сбора информации из флага --collect-workers.
+		collectWorkers, err := cmd.Flags().GetInt("collect-workers")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
 		// Контекст с отменой для управления жизненным циклом воркеров.
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -91,8 +97,9 @@ var serveCmd = &cobra.Command{
 			// и канал команд на сбор информации (на запись).
 			web.New(port, db, slog.Default(), version, collectCh),
 			// Воркер сбора информации с коммутаторов. Пробрасываем базу данных,
-			// логгер и канал команд на сбор информации (на чтение).
-			collector.New(db, slog.Default(), collectCh),
+			// логгер, канал команд на сбор информации (на чтение) и количество
+			// внутренних воркеров сбора данных с коммутаторов.
+			collector.New(db, slog.Default(), collectCh, collectWorkers),
 		}
 
 		// Запуск всех воркеров.
@@ -119,7 +126,7 @@ var serveCmd = &cobra.Command{
 			return errors.WithStack(err)
 		}
 
-		slog.Info("все воркеры завершили работу")
+		slog.Debug("все воркеры завершили работу")
 		return nil
 	},
 }
@@ -129,6 +136,8 @@ func init() {
 	serveCmd.Flags().String("db", "database.bolt", "путь к файлу базы данных bolt")
 	// Флаг порта web-сервера.
 	serveCmd.Flags().Int("port", 8080, "порт web-сервера")
+	// Флаг количества внутренних воркеров сбора информации с коммутаторов.
+	serveCmd.Flags().Int("collect-workers", 8, "количество воркеров сбора информации с коммутаторов")
 	// Флаг уровня логирования
 	serveCmd.Flags().String("level", "info", "уровень логирования debug|info|warn|error")
 	rootCmd.AddCommand(serveCmd)
