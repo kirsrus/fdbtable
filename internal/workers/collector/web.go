@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	RegisterCollector(TypeWEB, NewWebCollector())
+	RegisterCollector(model.CollectTypeWEB.String(), NewWebCollector())
 }
 
 // WebCollector — реализация сбора информации с коммутатора через
@@ -28,7 +28,7 @@ func NewWebCollector() *WebCollector {
 
 // Name возвращает имя типа сбора данных.
 func (c *WebCollector) Name() string {
-	return TypeWEB
+	return model.CollectTypeWEB.String()
 }
 
 // Collect выполняет сбор информации с коммутатора через его WEB-интерфейс

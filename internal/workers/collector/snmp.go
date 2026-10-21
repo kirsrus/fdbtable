@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	RegisterCollector(TypeSNMP, NewSNMPCollector())
+	RegisterCollector(model.CollectTypeSNMP.String(), NewSNMPCollector())
 }
 
 // SNMPCollector — реализация сбора информации с коммутатора по протоколу
@@ -28,7 +28,7 @@ func NewSNMPCollector() *SNMPCollector {
 
 // Name возвращает имя типа сбора данных.
 func (c *SNMPCollector) Name() string {
-	return TypeSNMP
+	return model.CollectTypeSNMP.String()
 }
 
 // Collect выполняет сбор информации с коммутатора по SNMP (заглушка).

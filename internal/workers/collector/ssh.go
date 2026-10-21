@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	RegisterCollector(TypeSSH, NewSSHCollector())
+	RegisterCollector(model.CollectTypeSSH.String(), NewSSHCollector())
 }
 
 // SSHCollector — реализация сбора информации с коммутатора через SSH
@@ -28,7 +28,7 @@ func NewSSHCollector() *SSHCollector {
 
 // Name возвращает имя типа сбора данных.
 func (c *SSHCollector) Name() string {
-	return TypeSSH
+	return model.CollectTypeSSH.String()
 }
 
 // Collect выполняет сбор информации с коммутатора через SSH (заглушка).
