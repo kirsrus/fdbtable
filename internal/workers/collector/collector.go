@@ -3,6 +3,7 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -15,6 +16,11 @@ import (
 // collectJobsBuffer — размер буфера очереди задач на сбор информации.
 // Очередь дедуплицируется по IP-адресу коммутатора.
 const collectJobsBuffer = 10
+
+// dataBucket — имя bucket в базе данных для хранения собранных данных
+// о коммутаторах. Ключ записи — IP-адрес коммутатора, значение —
+// JSON с полной моделью сбора (Switch).
+const dataBucket = "data"
 
 // Worker — воркер сбора информации с сетевых коммутаторов.
 type Worker struct {
@@ -165,7 +171,9 @@ func (w *Worker) collect(ctx context.Context, id int) error {
 // базовая (SNMP, SSH, WEB) или специализированная (SNMP_Cisco,
 // SSH_AllietTelesis_908 и т.п.). Перед вызовом реализации накладывается
 // таймаут (по умолчанию collectTimeout — 5 минут), а отмена ctx останавливает
-// сбор при завершении работы воркера.
+// сбор при завершении работы воркера. После успешного сбора собранные данные
+// сохраняются в базу данных: бакет data, ключ — IP-адрес коммутатора,
+// значение — JSON с моделью Switch.
 func (w *Worker) collectSw(ctx context.Context, id int, sw model.SwInfo) {
 	w.log.Info("запущен сбор данных с коммутатора",
 		slog.Int("worker", id),
@@ -200,10 +208,40 @@ func (w *Worker) collectSw(ctx context.Context, id int, sw model.SwInfo) {
 		return
 	}
 
+	// Сохраняем собранные данные в базу данных: бакет data, ключ — IP-адрес
+	// коммутатора, значение — JSON с полной моделью коммутатора.
+	if err := w.saveResult(result); err != nil {
+		w.log.Error("не удалось сохранить данные о коммутаторе в базу данных",
+			slog.Int("worker", id),
+			slog.String("ip", result.IP),
+			slog.String("method", sw.CollectType),
+			slog.Any("error", err),
+		)
+		return
+	}
+
 	w.log.Info("сбор данных с коммутатора завершён",
 		slog.Int("worker", id),
 		slog.String("ip", result.IP),
 		slog.String("method", sw.CollectType),
 		slog.Int("ports_count", len(result.Ports)),
 	)
+}
+
+// saveResult сохраняет собранную модель коммутатора в базу данных.
+// Запись кладётся в бакет data: ключ — IP-адрес коммутатора, значение —
+// JSON с моделью Switch. Повторный сбор по тому же IP перезаписывает
+// предыдущие данные.
+func (w *Worker) saveResult(sw model.Switch) error {
+	return w.db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(dataBucket))
+		if err != nil {
+			return err
+		}
+		data, err := json.Marshal(sw)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(sw.IP), data)
+	})
 }
