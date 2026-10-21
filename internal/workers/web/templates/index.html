@@ -51,13 +51,22 @@
             <div class="content">
                 <div class="panel ports-panel">
                     <div class="panel-title" id="ports-title">// ПОРТЫ КОММУТАТОРА</div>
+                    <!-- Общие сведения о коммутаторе, полученные при сборе -->
+                    <div class="sw-info" id="sw-info" style="display:none;"></div>
                     <div class="ports-placeholder" id="ports-placeholder">Выберите коммутатор слева</div>
                     <table class="ports-table" id="ports-table" style="display:none;">
                         <thead>
                             <tr>
+                                <th>Индекс</th>
                                 <th>Порт</th>
+                                <th>Адм. статус</th>
                                 <th>Статус</th>
-                                <th>VLAN</th>
+                                <th>Скорость</th>
+                                <th>Вх. поток</th>
+                                <th>Исх. поток</th>
+                                <th>Вх. ош.</th>
+                                <th>Исх. ош.</th>
+                                <th>Изм.</th>
                                 <th>MAC</th>
                             </tr>
                         </thead>
@@ -93,6 +102,7 @@
         var portsPlaceholder = document.getElementById('ports-placeholder');
         var portsTable = document.getElementById('ports-table');
         var portsBody = document.getElementById('ports-body');
+        var swInfo = document.getElementById('sw-info');
         var sortBtns = document.getElementsByClassName('sort-btn');
 
         var switches = [];
@@ -268,23 +278,138 @@
             loadPorts(ip);
         }
 
-        // Загрузка портов выбранного коммутатора.
+        // Текстовые представления состояний порта по RFC 2863.
+        // Значения соответствуют модели model.AdminState / model.OperState.
+        var adminStates = { 1: 'up', 2: 'down', 3: 'testing' };
+        var operStates = { 1: 'up', 2: 'down', 3: 'testing', 4: 'unknown',
+            5: 'dormant', 6: 'notPresent', 7: 'lowerLayerDown' };
+
+        // Количество MAC-адресов, выводимых в ячейке таблицы.
+        // Остальные скрываются со счётчиком в конце списка.
+        var visibleMacsCount = 4;
+
+        // Текстовое представление состояния порта по числовому значению.
+        // Неизвестные значения показываются как unknown.
+        function stateText(states, v) {
+            return states[v] || 'unknown';
+        }
+
+        // CSS-класс цвета для значения состояния: up — зелёным,
+        // down — красным, остальные (unknown, testing и т.п.) — серым.
+        function stateClass(s) {
+            if (s === 'up') { return 'st-up'; }
+            if (s === 'down') { return 'st-down'; }
+            return 'st-unknown';
+        }
+
+        // Формирование ячейки с MAC-адресами: первые 4 адреса выводятся
+        // столбиком, количество оставшихся скрытых добавляется счётчиком.
+        function renderMacs(macs) {
+            if (!macs || macs.length === 0) { return ''; }
+            var shown = macs.slice(0, visibleMacsCount);
+            var hidden = macs.length - shown.length;
+            var html = '';
+            for (var m = 0; m < shown.length; m++) {
+                if (m > 0) { html += '<br>'; }
+                html += escapeHtml(shown[m]);
+            }
+            if (hidden > 0) {
+                html += '<br><span class="mac-more">+ ' + hidden + ' ещё</span>';
+            }
+            return html;
+        }
+
+        // Текстовое представление числа: пустые значения — пустой строкой,
+        // нули выводятся как 0.
+        function numText(v) {
+            if (v === undefined || v === null || v === '') { return ''; }
+            return String(v);
+        }
+
+        // Форматирование длительности из наносекунд в человекочитаемый вид:
+        // "Nд ЧЧ:ММ:СС" (дни добавляются только если их больше нуля).
+        function formatDuration(ns) {
+            if (ns === undefined || ns === null || ns === '' || Number(ns) === 0) { return ''; }
+            function pad(x) { return (x < 10) ? '0' + x : String(x); }
+            var sec = Math.floor(Number(ns) / 1e9);
+            var d = Math.floor(sec / 86400);
+            sec -= d * 86400;
+            var h = Math.floor(sec / 3600);
+            sec -= h * 3600;
+            var m = Math.floor(sec / 60);
+            var s = sec - m * 60;
+            var time = pad(h) + ':' + pad(m) + ':' + pad(s);
+            return (d > 0) ? d + 'д ' + time : time;
+        }
+
+        // Форматирование даты и времени в формате "ДД.ММ.ГГГГ ЧЧ:ММ:СС".
+        function formatTime(ts) {
+            if (ts === undefined || ts === null || ts === '') { return ''; }
+            function pad(x) { return (x < 10) ? '0' + x : String(x); }
+            var d = new Date(ts);
+            if (isNaN(d.getTime())) { return String(ts); }
+            return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+                + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+
+        // Форматирование скорости (бит/с) в человекочитаемый вид.
+        function formatRate(bps) {
+            if (bps === undefined || bps === null || bps === '') { return ''; }
+            bps = Number(bps);
+            if (bps >= 1e9) { return (bps / 1e9).toFixed(2) + ' Гбит/с'; }
+            if (bps >= 1e6) { return (bps / 1e6).toFixed(2) + ' Мбит/с'; }
+            if (bps >= 1e3) { return (bps / 1e3).toFixed(2) + ' Кбит/с'; }
+            return bps + ' бит/с';
+        }
+
+        // Отрисовка общих сведений о коммутаторе компактной строкой над
+        // таблицей портов. Пустые значения пропускаются.
+        function renderSwInfo(sw) {
+            var items = [
+                ['IP', sw.ip],
+                ['MAC', sw.mac],
+                ['Имя', sw.hostname],
+                ['Описание', sw.description],
+                ['Местоположение', sw.location],
+                ['Контакт', sw.contact],
+                ['Производитель', sw.vendor],
+                ['Модель', sw.model],
+                ['ПО', sw.software_version],
+                ['Uptime', formatDuration(sw.uptime)],
+                ['Сбор', formatTime(sw.collected_at)]
+            ];
+            var html = '';
+            for (var i = 0; i < items.length; i++) {
+                var val = items[i][1];
+                if (val === undefined || val === null || val === '') { continue; }
+                html += '<span class="sw-info-item"><span class="sw-info-label">'
+                    + escapeHtml(items[i][0]) + ':</span> ' + escapeHtml(val) + '</span>';
+            }
+            swInfo.style.display = html ? 'block' : 'none';
+            swInfo.innerHTML = html;
+        }
+
+        // Загрузка данных выбранного коммутатора.
         function loadPorts(ip) {
             portsTitle.innerHTML = '// ПОРТЫ КОММУТАТОРА: ' + escapeHtml(ip);
             portsPlaceholder.style.display = 'block';
             portsPlaceholder.innerHTML = 'Загрузка портов...';
             portsTable.style.display = 'none';
+            swInfo.style.display = 'none';
 
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/ports?ip=' + encodeURIComponent(ip), true);
+            xhr.open('GET', '/api/swdata?ip=' + encodeURIComponent(ip), true);
             xhr.onreadystatechange = function () {
                 if (xhr.readyState !== 4) { return; }
                 if (xhr.status === 200) {
                     var resp = JSON.parse(xhr.responseText);
-                    renderPorts(resp.ports || []);
+                    var swData = resp.switch || {};
+                    renderSwInfo(swData);
+                    renderPorts(swData.ports || []);
                 } else {
+                    swInfo.style.display = 'none';
                     portsPlaceholder.style.display = 'block';
-                    portsPlaceholder.innerHTML = 'Модуль сбора портов не подключён.';
+                    portsPlaceholder.innerHTML = 'Данные о коммутаторе не найдены. Запустите сбор информации.';
                 }
             };
             xhr.send();
@@ -297,15 +422,24 @@
             var html = '';
             for (var i = 0; i < ports.length; i++) {
                 var p = ports[i];
+                var admin = stateText(adminStates, p.admin_state);
+                var oper = stateText(operStates, p.oper_state);
                 html += '<tr>'
-                    + '<td>' + escapeHtml(p.port || '') + '</td>'
-                    + '<td>' + escapeHtml(p.status || '') + '</td>'
-                    + '<td>' + escapeHtml(p.vlan || '') + '</td>'
-                    + '<td>' + escapeHtml(p.mac || '') + '</td>'
+                    + '<td>' + escapeHtml(numText(p.index)) + '</td>'
+                    + '<td>' + escapeHtml(p.name || '') + '</td>'
+                    + '<td class="' + stateClass(admin) + '">' + escapeHtml(admin) + '</td>'
+                    + '<td class="' + stateClass(oper) + '">' + escapeHtml(oper) + '</td>'
+                    + '<td>' + escapeHtml(numText(p.speed)) + '</td>'
+                    + '<td>' + escapeHtml(formatRate(p.in_rate)) + '</td>'
+                    + '<td>' + escapeHtml(formatRate(p.out_rate)) + '</td>'
+                    + '<td>' + escapeHtml(numText(p.in_errors)) + '</td>'
+                    + '<td>' + escapeHtml(numText(p.out_errors)) + '</td>'
+                    + '<td>' + escapeHtml(formatDuration(p.last_change)) + '</td>'
+                    + '<td class="ports-macs">' + renderMacs(p.macs) + '</td>'
                     + '</tr>';
             }
             if (ports.length === 0) {
-                html = '<tr><td colspan="4">Порты не найдены</td></tr>';
+                html = '<tr><td colspan="11">Порты не найдены</td></tr>';
             }
             portsBody.innerHTML = html;
         }

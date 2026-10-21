@@ -89,6 +89,22 @@ html, body {
     letter-spacing: 1px;
 }
 
+/* ---------- Общие сведения о коммутаторе ---------- */
+.sw-info {
+    padding: 6px 10px;
+    border-bottom: 1px solid #c3ccd6;
+    background: #f8fafc;
+    font-size: 12px;
+    line-height: 1.7;
+}
+.sw-info-item {
+    margin-right: 14px;
+    white-space: nowrap;
+}
+.sw-info-label {
+    color: #6b7280;
+}
+
 /* ---------- Кнопки сортировки ---------- */
 .sort-bar {
     padding: 6px 8px;
@@ -136,6 +152,7 @@ html, body {
 .sw-name {
     color: #1f2937;
     margin-left: 6px;
+    font-size: 10px;
 }
 .sw-actions {
     float: right;
@@ -216,6 +233,7 @@ html, body {
 /* ---------- Таблица портов (растягивающаяся) ---------- */
 .ports-panel {
     height: 100%;
+    overflow-x: auto;
 }
 .ports-table {
     width: 100%;
@@ -242,6 +260,30 @@ html, body {
     padding: 20px;
     color: #6b7280;
     text-align: center;
+}
+
+/* ---------- Цвета состояний портов ---------- */
+.st-up {
+    color: #00a86b;
+    font-weight: bold;
+}
+.st-down {
+    color: #d64545;
+    font-weight: bold;
+}
+.st-unknown {
+    color: #9ca3af;
+}
+
+/* ---------- Ячейка с MAC-адресами ---------- */
+.ports-table td.ports-macs {
+    vertical-align: top;
+    white-space: nowrap;
+    font-size: 12px;
+}
+.mac-more {
+    color: #6b7280;
+    font-style: italic;
 }
 
 /* ---------- Футер ---------- */

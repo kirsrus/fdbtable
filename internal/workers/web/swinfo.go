@@ -16,10 +16,16 @@ import (
 // Имя bucket в базе данных для хранения информации о коммутаторах.
 const swInfoBucket = "switches"
 
+// swDataBucket — имя bucket в базе данных, куда воркер collector сохраняет
+// собранные данные о коммутаторах. Ключ записи — IP-адрес коммутатора,
+// значение — JSON с полной моделью сбора (model.Switch).
+const swDataBucket = "data"
+
 // Ошибки операций с информацией о коммутаторах.
 var (
-	errSwNotFound = errors.New("коммутатор не найден")
-	errSwExists   = errors.New("коммутатор уже существует")
+	errSwNotFound     = errors.New("коммутатор не найден")
+	errSwExists       = errors.New("коммутатор уже существует")
+	errSwDataNotFound = errors.New("данные о коммутаторе не найдены")
 )
 
 // registerSwInfoRoutes регистрирует маршруты управления информацией о коммутаторах.
@@ -34,6 +40,9 @@ func (w *Worker) registerSwInfoRoutes() {
 	w.engine.POST("/api/swinfo/add", w.addSwInfo)
 	w.engine.POST("/api/swinfo/del", w.delSwInfo)
 	w.engine.POST("/api/swinfo/collect", w.collectSwInfo)
+
+	// Данные, собранные с коммутатора (бакет data): таблица портов и MAC.
+	w.engine.GET("/api/swdata", w.getSwData)
 }
 
 // getSwInfo возвращает информацию о коммутаторах в формате JSON.
@@ -80,6 +89,42 @@ func (w *Worker) getSwInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "switches": switches})
+}
+
+// getSwData возвращает собранные данные о коммутаторе (модель model.Switch
+// с таблицей портов и MAC-адресами) из бакета data. Ключ — IP-адрес
+// коммутатора, передаётся параметром ip. Данные в бакет кладёт воркер
+// collector после сбора информации с коммутатора.
+func (w *Worker) getSwData(c *gin.Context) {
+	ip := getParam(c, "ip")
+	if ip == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "не указан IP-адрес коммутатора"})
+		return
+	}
+
+	var sw model.Switch
+	err := w.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(swDataBucket))
+		if b == nil {
+			return errSwDataNotFound
+		}
+		data := b.Get([]byte(ip))
+		if data == nil {
+			return errSwDataNotFound
+		}
+		return json.Unmarshal(data, &sw)
+	})
+	if err != nil {
+		if errors.Is(err, errSwDataNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"ok": false, "error": "данные о коммутаторе не найдены"})
+			return
+		}
+		w.log.Error("ошибка чтения собранных данных о коммутаторе", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "ошибка чтения базы данных"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "switch": sw})
 }
 
 // setSwInfo изменяет информацию о существующем коммутаторе.
