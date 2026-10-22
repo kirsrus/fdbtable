@@ -346,6 +346,39 @@
             return (d > 0) ? d + 'д ' + time : time;
         }
 
+        // Русская форма слова в зависимости от числа:
+        // pluralRu(1, 'день', 'дня', 'дней') -> 'день',
+        // pluralRu(3, 'час', 'часа', 'часов') -> 'часа',
+        // pluralRu(5, 'минута', 'минуты', 'минут') -> 'минут'.
+        function pluralRu(n, one, few, many) {
+            var n10 = n % 10;
+            var n100 = n % 100;
+            if (n10 === 1 && n100 !== 11) { return one; }
+            if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) { return few; }
+            return many;
+        }
+
+        // Форматирование интервала из наносекунд в вид
+        // "3 дня 3 часа 1 минута назад".
+        // Отрицательные или нулевые значения возвращают пустую строку.
+        function formatAgo(ns) {
+            if (ns === undefined || ns === null || ns === '' || Number(ns) <= 0) { return ''; }
+            var sec = Math.floor(Number(ns) / 1e9);
+            var d = Math.floor(sec / 86400);
+            sec -= d * 86400;
+            var h = Math.floor(sec / 3600);
+            sec -= h * 3600;
+            var m = Math.floor(sec / 60);
+            var s = sec - m * 60;
+            var parts = [];
+            if (d > 0) { parts.push(d + ' ' + pluralRu(d, 'день', 'дня', 'дней')); }
+            if (h > 0) { parts.push(h + ' ' + pluralRu(h, 'час', 'часа', 'часов')); }
+            if (m > 0) { parts.push(m + ' ' + pluralRu(m, 'минута', 'минуты', 'минут')); }
+            if (parts.length === 0 && s > 0) { parts.push(s + ' ' + pluralRu(s, 'секунда', 'секунды', 'секунд')); }
+            if (parts.length === 0) { return ''; }
+            return parts.join(' ') + ' назад';
+        }
+
         // Форматирование даты и времени в формате "ДД.ММ.ГГГГ ЧЧ:ММ:СС".
         function formatTime(ts) {
             if (ts === undefined || ts === null || ts === '') { return ''; }
@@ -409,7 +442,9 @@
                     var resp = JSON.parse(xhr.responseText);
                     var swData = resp.switch || {};
                     renderSwInfo(swData);
-                    renderPorts(swData.ports || []);
+                    // uptime передаётся в renderPorts для вычисления
+                    // возраста последнего изменения порта (uptime - last_change).
+                    renderPorts(swData.ports || [], swData.uptime);
                 } else {
                     swInfo.style.display = 'none';
                     portsPlaceholder.style.display = 'block';
@@ -419,8 +454,9 @@
             xhr.send();
         }
 
-        // Отрисовка таблицы портов.
-        function renderPorts(ports) {
+        // Отрисовка таблицы портов. uptime — время работы коммутатора
+        // (используется для вычисления возраста последнего изменения порта).
+        function renderPorts(ports, uptime) {
             portsPlaceholder.style.display = 'none';
             portsTable.style.display = 'table';
             var html = '';
@@ -428,6 +464,13 @@
                 var p = ports[i];
                 var admin = stateText(adminStates, p.admin_state);
                 var oper = stateText(operStates, p.oper_state);
+                // Возраст изменения: сколько времени назад порт сменил состояние.
+                // last_change — момент изменения относительно времени работы
+                // коммутатора, поэтому вычитаем его из uptime.
+                var ago = '';
+                if (uptime != 0 && p.last_change != 0) {
+                    ago = formatAgo(uptime - p.last_change);
+                }
                 html += '<tr>'
                     + '<td>' + escapeHtml(numText(p.index)) + '</td>'
                     + '<td>' + escapeHtml(p.name || '') + '</td>'
@@ -438,7 +481,10 @@
                     + '<td>' + escapeHtml(formatRate(p.out_rate)) + '</td>'
                     + '<td>' + escapeHtml(numText(p.in_errors)) + '</td>'
                     + '<td>' + escapeHtml(numText(p.out_errors)) + '</td>'
-                    + '<td>' + escapeHtml(formatDuration(p.last_change)) + '</td>'
+                    + '<td>'
+                    + escapeHtml(formatDuration(p.last_change))
+                    + (ago ? '<br><span class="change-ago">' + escapeHtml(ago) + '</span>' : '')
+                    + '</td>'
                     + '<td class="ports-macs">' + renderMacs(p.macs) + '</td>'
                     + '</tr>';
             }

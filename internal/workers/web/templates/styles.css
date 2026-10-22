@@ -288,6 +288,13 @@ html, body {
     font-style: italic;
 }
 
+/* Возраст изменения порта ("N дней ... назад") в столбце "Изм." */
+.change-ago {
+    color: #6b7280;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
 /* ---------- Футер ---------- */
 .footer {
     background: #e2e8f0;
