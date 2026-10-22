@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kirsrus/fdbtable/internal/model"
+	"github.com/kirsrus/fdbtable/internal/workers/collector"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -95,6 +96,11 @@ func (w *Worker) getSwInfo(c *gin.Context) {
 // с таблицей портов и MAC-адресами) из бакета data. Ключ — IP-адрес
 // коммутатора, передаётся параметром ip. Данные в бакет кладёт воркер
 // collector после сбора информации с коммутатора.
+//
+// Если в бакете lock по этому IP-адресу есть запись (в данный момент идёт
+// сбор данных), возвращается HTTP 202 Accepted с текстом выполняемой
+// операции из значения записи: веб-страница может периодически опрашивать
+// хэндлер и дождаться готовых данных.
 func (w *Worker) getSwData(c *gin.Context) {
 	ip := getParam(c, "ip")
 	if ip == "" {
@@ -102,8 +108,38 @@ func (w *Worker) getSwData(c *gin.Context) {
 		return
 	}
 
-	var sw model.Switch
+	// Проверяем, не выполняется ли сейчас сбор данных по этому IP-адресу.
+	// Запись в бакете lock создаёт воркер collector при старте сбора и
+	// удаляет после его завершения (успешного или с ошибкой).
+	var lockMsg string
 	err := w.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(collector.LockBucket))
+		if b == nil {
+			return nil
+		}
+		if v := b.Get([]byte(ip)); v != nil {
+			lockMsg = string(v)
+		}
+		return nil
+	})
+	if err != nil {
+		w.log.Error("ошибка чтения бакета lock", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "ошибка чтения базы данных"})
+		return
+	}
+	if lockMsg != "" {
+		// Сбор данных ещё идёт: данные пока недоступны.
+		// Текст операции отдаём из значения записи бакета lock.
+		c.JSON(http.StatusAccepted, gin.H{
+			"ok":      false,
+			"pending": true,
+			"error":   lockMsg,
+		})
+		return
+	}
+
+	var sw model.Switch
+	err = w.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(swDataBucket))
 		if b == nil {
 			return errSwDataNotFound

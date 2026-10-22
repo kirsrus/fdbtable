@@ -68,6 +68,23 @@ var serveCmd = &cobra.Command{
 		defer db.Close()
 		slog.Info("открыта база данных", slog.String("database", dbPath))
 
+		// Очистка бакета lock от записей, оставшихся после предыдущего запуска
+		// (например, при аварийном завершении процесса). Записи в нём — отметки
+		// выполняющихся операций с коммутаторами, актуальные только на время
+		// жизни текущего процесса, поэтому при старте они не нужны.
+		if err := db.Update(func(tx *bolt.Tx) error {
+			// Удаляем бакет целиком, если он существует.
+			if err := tx.DeleteBucket([]byte(collector.LockBucket)); err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
+				return err
+			}
+			// Создаём бакет заново пустым.
+			_, err := tx.CreateBucket([]byte(collector.LockBucket))
+			return err
+		}); err != nil {
+			return errors.WithStack(fmt.Errorf("не удалось очистить бакет %q: %w", collector.LockBucket, err))
+		}
+		slog.Info("очищен бакет lock от записей предыдущего запуска")
+
 		// Порт web-сервера из флага --port.
 		port, err := cmd.Flags().GetInt("port")
 		if err != nil {

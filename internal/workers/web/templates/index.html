@@ -112,6 +112,13 @@
         var switches = [];
         var currentSort = 'ip';
         var selectedIp = null;
+      
+        // Опрос данных о коммутаторе после запуска сбора (см. startPolling).
+        // pollTimer — идентификатор таймера, pollAttempts — число попыток,
+        // pollMaxAttempts — максимальное число попыток (5 минут по 1 секунде).
+        var pollTimer = null;
+        var pollAttempts = 0;
+        var pollMaxAttempts = 300;
 
         // Экранирование HTML-спецсимволов.
         function escapeHtml(s) {
@@ -256,22 +263,25 @@
             }
 
             // Клик по кнопке "обновить информацию" — запуск сбора данных с коммутатора.
+            // После запуска сбора шаблон опрашивает /api/swdata раз в секунду
+            // (loadPorts с параметром poll=true), пока данные не будут готовы.
             var refreshes = swList.getElementsByClassName('sw-refresh');
             for (var r = 0; r < refreshes.length; r++) {
-                refreshes[r].onclick = (function (btn) {
-                    return function (e) {
-                        if (e.preventDefault) { e.preventDefault(); }
-                        var ip = btn.getAttribute('data-ip');
-                        postForm('/api/swinfo/collect', 'ip=' + encodeURIComponent(ip), function (ok, resp) {
-                            if (ok) {
-                                // После сбора перезагружаем порты выбранного коммутатора.
-                                loadPorts(ip);
-                            } else {
-                                window.alert(resp.error || 'Ошибка запуска сбора данных о коммутаторе');
-                            }
-                        });
-                    };
-                })(refreshes[r]);
+            	refreshes[r].onclick = (function (btn) {
+            		return function (e) {
+            			if (e.preventDefault) { e.preventDefault(); }
+            			var ip = btn.getAttribute('data-ip');
+            			postForm('/api/swinfo/collect', 'ip=' + encodeURIComponent(ip), function (ok, resp) {
+            				if (ok) {
+            					// Запускаем загрузку портов с опросом: пока данные
+            					// собираются, шаблон опрашивает /api/swdata раз в секунду.
+            					loadPorts(ip, true);
+            				} else {
+            					window.alert(resp.error || 'Ошибка запуска сбора данных о коммутаторе');
+            				}
+            			});
+            		};
+            	})(refreshes[r]);
             }
         }
 
@@ -427,31 +437,118 @@
         }
 
         // Загрузка данных выбранного коммутатора.
-        function loadPorts(ip) {
-            portsTitle.innerHTML = '// ПОРТЫ КОММУТАТОРА: ' + escapeHtml(ip);
-            portsPlaceholder.style.display = 'block';
-            portsPlaceholder.innerHTML = 'Загрузка портов...';
-            portsTable.style.display = 'none';
-            swInfo.style.display = 'none';
-
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/swdata?ip=' + encodeURIComponent(ip), true);
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) { return; }
-                if (xhr.status === 200) {
-                    var resp = JSON.parse(xhr.responseText);
-                    var swData = resp.switch || {};
-                    renderSwInfo(swData);
-                    // uptime передаётся в renderPorts для вычисления
-                    // возраста последнего изменения порта (uptime - last_change).
-                    renderPorts(swData.ports || [], swData.uptime);
-                } else {
-                    swInfo.style.display = 'none';
-                    portsPlaceholder.style.display = 'block';
-                    portsPlaceholder.innerHTML = 'Данные о коммутаторе не найдены. Запустите сбор информации.';
-                }
-            };
-            xhr.send();
+        // Если по IP-адресу идёт сбор данных (ответ 202 Accepted), всегда
+        // запускает периодический опрос /api/swdata раз в секунду до появления
+        // данных. Данные отсутствуют (ответ 404) — опрос запускается только
+        // при poll=true (вызов после нажатия кнопки "Обновить информацию").
+        function loadPorts(ip, poll) {
+        	stopPolling();
+        	portsTitle.innerHTML = '// ПОРТЫ КОММУТАТОРА: ' + escapeHtml(ip);
+        	portsPlaceholder.style.display = 'block';
+        	portsPlaceholder.innerHTML = 'Загрузка портов...';
+        	portsTable.style.display = 'none';
+        	swInfo.style.display = 'none';
+      
+        	var xhr = new XMLHttpRequest();
+        	xhr.open('GET', '/api/swdata?ip=' + encodeURIComponent(ip), true);
+        	xhr.onreadystatechange = function () {
+        		if (xhr.readyState !== 4) { return; }
+        		var resp = null;
+        		try {
+        			resp = JSON.parse(xhr.responseText);
+        		} catch (err) {
+        			resp = null;
+        		}
+        		// Данные готовы — отрисовываем их.
+        		if (xhr.status === 200 && resp && resp.switch) {
+        			stopPolling();
+        			var swData = resp.switch;
+        			renderSwInfo(swData);
+        			// uptime передаётся в renderPorts для вычисления
+        			// возраста последнего изменения порта (uptime - last_change).
+        			renderPorts(swData.ports || [], swData.uptime);
+        			return;
+        		}
+        		// Ответ 202 (Accepted) означает, что по IP-адресу в данный
+        		// момент идёт сбор данных; текст ответа содержит описание
+        		// выполняемой операции из бакета lock. Опрос запускается
+        		// всегда: и после "Обновить информацию", и при повторном
+        		// выборе коммутатора, пока сбор ещё идёт.
+        		if (xhr.status === 202 && resp) {
+        			portsPlaceholder.style.display = 'block';
+        			portsPlaceholder.innerHTML = escapeHtml(resp.error || 'Идёт сбор данных...');
+        			startPolling(ip);
+        			return;
+        		}
+        		// Данных нет. Сразу после нажатия кнопки обновления это
+        		// нормально: отметка в бакете lock может ещё не появиться,
+        		// а данные будут сохранены после окончания сбора.
+        		if (poll) {
+        			portsPlaceholder.style.display = 'block';
+        			portsPlaceholder.innerHTML = 'Идёт сбор данных...';
+        			startPolling(ip);
+        			return;
+        		}
+        		swInfo.style.display = 'none';
+        		portsPlaceholder.style.display = 'block';
+        		portsPlaceholder.innerHTML = 'Данные о коммутаторе не найдены. Запустите сбор информации.';
+        	};
+        	xhr.send();
+        }
+      
+        // Опрос данных о коммутаторе после запуска сбора информации.
+        // Раз в секунду запрашивает /api/swdata, пока не получит данные
+        // (или не исчерпает лимит попыток).
+        function startPolling(ip) {
+        	if (pollTimer) { return; } // опрос уже запущен
+        	pollAttempts = 0;
+        	pollTimer = setInterval(function () {
+        		pollAttempts++;
+        		if (pollAttempts > pollMaxAttempts) {
+        			// Исчерпаны попытки ожидания данных — останавливаемся.
+        			stopPolling();
+        			portsPlaceholder.style.display = 'block';
+        			portsPlaceholder.innerHTML = 'Превышено время ожидания данных о коммутаторе. Запустите сбор информации.';
+        			return;
+        		}
+        		var xhr = new XMLHttpRequest();
+        		xhr.open('GET', '/api/swdata?ip=' + encodeURIComponent(ip), true);
+        		xhr.onreadystatechange = function () {
+        			if (xhr.readyState !== 4) { return; }
+        			var resp = null;
+        			try {
+        				resp = JSON.parse(xhr.responseText);
+        			} catch (err) {
+        				resp = null;
+        			}
+        			// Данные готовы — останавливаем опрос и отрисовываем.
+        			if (xhr.status === 200 && resp && resp.switch) {
+        				stopPolling();
+        				var swData = resp.switch;
+        				renderSwInfo(swData);
+        				renderPorts(swData.ports || [], swData.uptime);
+        				return;
+        			}
+        			// Сбор всё ещё идёт — показываем сообщение из ответа.
+        			if (xhr.status === 202 && resp) {
+        				portsPlaceholder.style.display = 'block';
+        				portsPlaceholder.innerHTML = escapeHtml(resp.error || 'Идёт сбор данных...');
+        				return;
+        			}
+        			// Прочие ответы (данных пока нет) — ждём следующей попытки.
+        			portsPlaceholder.style.display = 'block';
+        			portsPlaceholder.innerHTML = 'Идёт сбор данных...';
+        		};
+        		xhr.send();
+        	}, 1000);
+        }
+      
+        // Остановка опроса данных о коммутаторе.
+        function stopPolling() {
+        	if (pollTimer) {
+        		clearInterval(pollTimer);
+        		pollTimer = null;
+        	}
         }
 
         // Отрисовка таблицы портов. uptime — время работы коммутатора

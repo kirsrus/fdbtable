@@ -22,6 +22,16 @@ const collectJobsBuffer = 10
 // JSON с полной моделью сбора (Switch).
 const dataBucket = "data"
 
+// LockBucket — имя bucket в базе данных для отметки выполняющихся операций
+// с коммутаторами. Ключ записи — IP-адрес коммутатора, значение — текст
+// текущей операции. Запись создаётся при старте сбора данных (в том числе
+// SNMP-опроса в snmp_collect.go) и удаляется после его завершения.
+const LockBucket = "lock"
+
+// lockCollectMessage — значение записи в бакете lock при выполняющемся
+// сборе данных с коммутатора.
+const lockCollectMessage = "сбор данных с коммутатора"
+
 // Worker — воркер сбора информации с сетевых коммутаторов.
 type Worker struct {
 	db           *bolt.DB
@@ -192,6 +202,28 @@ func (w *Worker) collectSw(ctx context.Context, id int, sw model.SwInfo) {
 		return
 	}
 
+	// Отмечаем в бакете lock базы данных, что по IP-адресу коммутатора
+	// в данный момент выполняется сбор данных (например, SNMP-опрос в
+	// snmp_collect.go). Ключ записи — IP-адрес, значение — текст текущей
+	// операции. Запись удаляется после завершения сбора независимо от его
+	// результата: успешного или с ошибкой.
+	if err := w.setCollectLock(sw.IP); err != nil {
+		w.log.Warn("не удалось отметить сбор данных в бакете lock",
+			slog.Int("worker", id),
+			slog.String("ip", sw.IP),
+			slog.Any("error", err),
+		)
+	}
+	defer func() {
+		if err := w.clearCollectLock(sw.IP); err != nil {
+			w.log.Warn("не удалось снять отметку сбора данных из бакета lock",
+				slog.Int("worker", id),
+				slog.String("ip", sw.IP),
+				slog.Any("error", err),
+			)
+		}
+	}()
+
 	// Ограничиваем время сбора информации с коммутатора таймаутом
 	// (по умолчанию 5 минут) с возможностью отмены извне.
 	collectCtx, cancel := context.WithTimeout(ctx, w.collectTimeout)
@@ -243,5 +275,32 @@ func (w *Worker) saveResult(sw model.Switch) error {
 			return err
 		}
 		return b.Put([]byte(sw.IP), data)
+	})
+}
+
+// setCollectLock создаёт запись в бакете lock: ключ — IP-адрес коммутатора,
+// значение — текст выполняемой операции ("сбор данных с коммутатора").
+// Запись позволяет другим компонентам приложения (например, web-воркеру)
+// видеть, что по данному IP-адресу в данный момент идёт сбор данных.
+func (w *Worker) setCollectLock(ip string) error {
+	return w.db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(LockBucket))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(ip), []byte(lockCollectMessage))
+	})
+}
+
+// clearCollectLock удаляет запись из бакета lock по IP-адресу коммутатора.
+// Вызывается после завершения сбора данных (в том числе с ошибкой), чтобы
+// снять отметку о выполняемой операции.
+func (w *Worker) clearCollectLock(ip string) error {
+	return w.db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(LockBucket))
+		if err != nil {
+			return err
+		}
+		return b.Delete([]byte(ip))
 	})
 }
