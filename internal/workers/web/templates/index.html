@@ -306,47 +306,6 @@
             return 'st-unknown';
         }
 
-        // Декодирование base64-строки в массив байт.
-        // Собственная реализация: не зависит от atob, работает в старых браузерах.
-        function base64ToBytes(s) {
-            var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-            var bytes = [];
-            var buffer = 0;
-            var bits = 0;
-            for (var i = 0; i < s.length; i++) {
-                var c = s.charAt(i);
-                if (c === '=') { break; }
-                var idx = chars.indexOf(c);
-                if (idx < 0) { continue; }
-                buffer = (buffer << 6) | idx;
-                bits += 6;
-                if (bits >= 8) {
-                    bits -= 8;
-                    bytes.push((buffer >> bits) & 0xFF);
-                }
-            }
-            return bytes;
-        }
-
-        // Форматирование MAC-адреса из JSON-ответа. Сервер отдаёт
-        // net.HardwareAddr (6 октетов) как base64-строку; здесь она
-        // декодируется и приводится к виду "D8:50:E6:48:B7:E8".
-        // Если значение уже текстовая форма MAC — меняется только регистр.
-        function formatMac(v) {
-            if (v === undefined || v === null || v === '') { return ''; }
-            var s = String(v);
-            // Уже текстовая форма MAC (с разделителями) — меняем только регистр.
-            if (/[:\-.]/.test(s)) { return s.toUpperCase(); }
-            var bytes = base64ToBytes(s);
-            if (bytes.length === 0) { return s; }
-            var parts = [];
-            for (var j = 0; j < bytes.length; j++) {
-                var h = bytes[j].toString(16);
-                parts.push((h.length < 2 ? '0' : '') + h);
-            }
-            return parts.join(':').toUpperCase();
-        }
-
         // Формирование ячейки с MAC-адресами: первые 4 адреса выводятся
         // столбиком, количество оставшихся скрытых добавляется счётчиком.
         function renderMacs(macs) {
@@ -356,7 +315,7 @@
             var html = '';
             for (var m = 0; m < shown.length; m++) {
                 if (m > 0) { html += '<br>'; }
-                html += escapeHtml(formatMac(shown[m]));
+                html += escapeHtml(shown[m]["string_mac"] + ' ' + shown[m]["vendor"]);
             }
             if (hidden > 0) {
                 html += '<br><span class="mac-more">+ ' + hidden + ' ещё</span>';

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endobit/oui"
 	"github.com/kirsrus/fdbtable/internal/model"
 	scrapligodriver "github.com/scrapli/scrapligo/driver/generic"
 )
@@ -577,7 +578,7 @@ func parseSSHCounters(out string) map[string]sshCounters {
 
 // collectSSHFdb опрашивает FDB-таблицу коммутатора и возвращает карту
 // "имя порта" → список изученных MAC-адресов (отсортированный).
-func collectSSHFdb(ctx context.Context, driver *scrapligodriver.Driver, cmd string) (map[string][]net.HardwareAddr, error) {
+func collectSSHFdb(ctx context.Context, driver *scrapligodriver.Driver, cmd string) (map[string][]model.Mac, error) {
 	out, err := sendInput(ctx, driver, cmd)
 	if err != nil {
 		return nil, err
@@ -591,8 +592,8 @@ func collectSSHFdb(ctx context.Context, driver *scrapligodriver.Driver, cmd stri
 // форматы MAC-адресов cisco (aaaa.bbbb.cccc), классический
 // (aa:bb:cc:dd:ee:ff) и дефисный (aa-bb-cc-dd-ee-ff). Порт — последний
 // токен строки.
-func parseSSHFdb(out string) map[string][]net.HardwareAddr {
-	macsByPort := make(map[string][]net.HardwareAddr)
+func parseSSHFdb(out string) map[string][]model.Mac {
+	macsByPort := make(map[string][]model.Mac)
 	for _, rawLine := range strings.Split(out, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.Contains(line, "---") {
@@ -610,12 +611,12 @@ func parseSSHFdb(out string) map[string][]net.HardwareAddr {
 		if port == "" {
 			continue
 		}
-		macsByPort[port] = append(macsByPort[port], mac)
+		macsByPort[port] = append(macsByPort[port], *mac)
 	}
 	// Упорядочиваем адреса каждого порта.
 	for _, macs := range macsByPort {
 		sort.Slice(macs, func(i, j int) bool {
-			return bytes.Compare(macs[i], macs[j]) < 0
+			return bytes.Compare(macs[i].Mac, macs[j].Mac) < 0
 		})
 	}
 	return macsByPort
@@ -625,7 +626,7 @@ func parseSSHFdb(out string) map[string][]net.HardwareAddr {
 // каноническом представлении net.HardwareAddr. Форматы: cisco
 // (aaaa.bbbb.cccc), классический (aa:bb:cc:dd:ee:ff) и дефисный
 // (aa-bb-cc-dd-ee-ff).
-func parseMAC(text string) (net.HardwareAddr, bool) {
+func parseMAC(text string) (*model.Mac, bool) {
 	for _, token := range strings.Fields(text) {
 		clean := strings.NewReplacer(".", "", ":", "", "-", "").Replace(token)
 		if len(clean) != 12 {
@@ -635,7 +636,14 @@ func parseMAC(text string) (net.HardwareAddr, bool) {
 		if err != nil {
 			continue
 		}
-		return net.HardwareAddr(bytes), true
+
+		mac := model.Mac{
+			Mac:       net.HardwareAddr(bytes),
+			StringMac: strings.ToUpper(net.HardwareAddr(bytes).String()),
+			Vendor:    oui.VendorFromMAC(net.HardwareAddr(bytes)),
+		}
+
+		return &mac, true
 	}
 	return nil, false
 }

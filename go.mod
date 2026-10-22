@@ -3,6 +3,7 @@ module github.com/kirsrus/fdbtable
 go 1.26.0
 
 require (
+	github.com/endobit/oui v0.7.0
 	github.com/fatih/color v1.19.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gosnmp/gosnmp v1.45.0

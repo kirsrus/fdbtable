@@ -87,7 +87,24 @@ type Port struct {
 
 	// Macs — MAC-адреса, обнаруженные на порту.
 	// Вычисляются по FDB-таблице коммутатора.
-	Macs []net.HardwareAddr `json:"macs"`
+	Macs []Mac `json:"macs"`
+}
+
+// Mac - описывает MAC-адрес устройства.
+type Mac struct {
+	// Mac в оригинальном виде.
+	Mac net.HardwareAddr `json:"mac"`
+
+	// StringMac в виде строки через ":"
+	StringMac string `json:"string_mac"`
+
+	// Vendor описывает производителя устройства.
+	Vendor string `json:"vendor"`
+}
+
+// String - текстовое представление MAC-адреса.
+func (m Mac) String() string {
+	return m.StringMac + " " + m.Vendor
 }
 
 // AdminState — административное состояние порта.

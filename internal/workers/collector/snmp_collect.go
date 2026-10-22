@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endobit/oui"
 	"github.com/gosnmp/gosnmp"
 	"github.com/kirsrus/fdbtable/internal/model"
 )
@@ -298,7 +299,7 @@ func walkColumn(conn *gosnmp.GoSNMP, root string) (map[int64]gosnmp.SnmpPDU, err
 // collectFdb опрашивает FDB-таблицу BRIDGE-MIB (dot1dTpFdb) и сопоставляет
 // изученные коммутатором MAC-адреса с интерфейсами. Возвращает карту
 // "индекс интерфейса" → список MAC-адресов (отсортированный).
-func collectFdb(conn *gosnmp.GoSNMP, ifaces map[int64]*ifaceData) (map[int64][]net.HardwareAddr, error) {
+func collectFdb(conn *gosnmp.GoSNMP, ifaces map[int64]*ifaceData) (map[int64][]model.Mac, error) {
 	// Колонки FDB-таблицы: изученный адрес и порт моста, на котором он
 	// изучен. Индекс записи в обеих колонках — MAC-адрес.
 	addrPdus, err := walk(conn, oidDot1dTpFdbAddress)
@@ -336,7 +337,7 @@ func collectFdb(conn *gosnmp.GoSNMP, ifaces map[int64]*ifaceData) (map[int64][]n
 	}
 	if len(addrByKey) == 0 {
 		// Адресная колонка пуста — сопоставлять нечего.
-		return map[int64][]net.HardwareAddr{}, nil
+		return map[int64][]model.Mac{}, nil
 	}
 
 	// Соответствие номера порта моста (bridge port) индексу интерфейса.
@@ -360,8 +361,8 @@ func collectFdb(conn *gosnmp.GoSNMP, ifaces map[int64]*ifaceData) (map[int64][]n
 	}
 
 	// Группируем адреса по индексам интерфейсов.
-	macsByIf := make(map[int64][]net.HardwareAddr)
-	for key, mac := range addrByKey {
+	macsByIf := make(map[int64][]model.Mac)
+	for key, item := range addrByKey {
 		bridgePort, ok := portByKey[key]
 		if !ok || bridgePort == 0 {
 			// Запись без порта или на порту управления (0) в таблицу портов
@@ -372,12 +373,19 @@ func collectFdb(conn *gosnmp.GoSNMP, ifaces map[int64]*ifaceData) (map[int64][]n
 		if !ok {
 			continue
 		}
+
+		mac := model.Mac{
+			Mac:       item,
+			StringMac: strings.ToUpper(item.String()),
+			Vendor:    oui.VendorFromMAC(item),
+		}
+
 		macsByIf[ifIndex] = append(macsByIf[ifIndex], mac)
 	}
 	// Упорядочиваем адреса каждого порта.
 	for _, macs := range macsByIf {
 		sort.Slice(macs, func(i, j int) bool {
-			return bytes.Compare(macs[i], macs[j]) < 0
+			return bytes.Compare(macs[i].Mac, macs[j].Mac) < 0
 		})
 	}
 	return macsByIf, nil
