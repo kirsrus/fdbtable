@@ -315,7 +315,7 @@
             var html = '';
             for (var m = 0; m < shown.length; m++) {
                 if (m > 0) { html += '<br>'; }
-                html += escapeHtml(shown[m]["string_mac"] + ' ' + shown[m]["vendor"]);
+                html += escapeHtml(shown[m]["string_mac"]) + ' <small>' + escapeHtml(shown[m]["vendor"]) + '</small>';
             }
             if (hidden > 0) {
                 html += '<br><span class="mac-more">+ ' + hidden + ' ещё</span>';

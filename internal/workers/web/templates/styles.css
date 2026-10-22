@@ -266,22 +266,22 @@ html, body {
 
 /* ---------- Цвета состояний портов ---------- */
 .st-up {
-    color: #00a86b;
+    color: #00a86b !important;
     font-weight: bold;
 }
 .st-down {
-    color: #d64545;
+    color: #d64545 !important; 
     font-weight: bold;
 }
 .st-unknown {
-    color: #9ca3af;
+    color: #9ca3af !important;
 }
 
 /* ---------- Ячейка с MAC-адресами ---------- */
 .ports-table td.ports-macs {
     vertical-align: top;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 14px;
 }
 .mac-more {
     color: #6b7280;
