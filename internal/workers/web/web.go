@@ -4,6 +4,8 @@ package web
 import (
 	"context"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -34,11 +36,17 @@ func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan
 	engine := gin.New()
 	engine.Use(gin.Logger(), gin.Recovery())
 
-	// Загрузка HTML-шаблонов из каталога модуля.
-	engine.LoadHTMLGlob("internal/workers/web/templates/*.html")
+	// Загрузка HTML-шаблонов из встроенного в бинарный файл набора.
+	// Извлекаем под-файловую систему каталога templates, чтобы имена
+	// шаблонов совпадали с именами файлов (index.html, devices.html).
+	staticFS, err := fs.Sub(templatesFS, "templates")
+	if err != nil {
+		panic(err)
+	}
+	engine.SetHTMLTemplate(template.Must(template.New("").ParseFS(staticFS, "*.html")))
 
 	// Статические файлы (styles.css), используемые шаблонами.
-	engine.StaticFile("/static/styles.css", "internal/workers/web/templates/styles.css")
+	engine.StaticFS("/static", http.FS(staticFS))
 
 	// Маршрут главной страницы.
 	engine.GET("/", func(c *gin.Context) {
