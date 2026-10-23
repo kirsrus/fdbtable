@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kirsrus/fdbtable/internal/model"
@@ -160,7 +161,56 @@ func (w *Worker) getSwData(c *gin.Context) {
 		return
 	}
 
+	// Дополняем MAC-адреса в таблице портов информацией об устройствах
+	// из бакета devices: подставляем IP-адрес, тип, имя хоста,
+	// местоположение и описание устройства.
+	if err := w.enrichMacsWithDevices(&sw); err != nil {
+		w.log.Error("ошибка обогащения MAC-адресов данными об устройствах", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "ошибка чтения базы данных"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "switch": sw})
+}
+
+// enrichMacsWithDevices дополняет MAC-адреса всех портов коммутатора
+// данными об устройствах из бакета devices (модель model.Device):
+// IP-адрес, тип, имя хоста, местоположение и описание. Если устройство
+// с указанным MAC-адресом не зарегистрировано, поля остаются пустыми.
+//
+// Ключ записи в бакете — MAC-адрес в нижнем регистре (см. addDevice),
+// а StringMac в собранных данных хранится в верхнем регистре,
+// поэтому перед поиском адрес приводится к нижнему регистру.
+func (w *Worker) enrichMacsWithDevices(sw *model.Switch) error {
+	if sw == nil {
+		return nil
+	}
+	return w.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(devicesBucket))
+		if b == nil {
+			// Устройства ещё не зарегистрированы — обогащать нечем.
+			return nil
+		}
+		for i := range sw.Ports {
+			for j := range sw.Ports[i].Macs {
+				mac := &sw.Ports[i].Macs[j]
+				data := b.Get([]byte(strings.ToLower(mac.StringMac)))
+				if data == nil {
+					continue
+				}
+				var dev model.Device
+				if err := json.Unmarshal(data, &dev); err != nil {
+					return err
+				}
+				mac.IP = dev.IP
+				mac.Type = dev.Type
+				mac.Hostname = dev.Hostname
+				mac.Location = dev.Location
+				mac.Description = dev.Description
+			}
+		}
+		return nil
+	})
 }
 
 // setSwInfo изменяет информацию о существующем коммутаторе.

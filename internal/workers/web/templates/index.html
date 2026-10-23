@@ -329,6 +329,33 @@
             return 'st-unknown';
         }
 
+        // Формирование второй строки описания под адресом из данных
+        // об устройстве в базе devices: MAC, тип, имя хоста, местоположение
+        // и описание. Пустые значения пропускаются; если заполненных полей
+        // нет, строка не выводится.
+        function renderMacDetail(mac) {
+            if (!mac) { return ''; }
+            var hasIp = !(mac.ip === undefined || mac.ip === null || mac.ip === '');
+            var fields = [];
+            // MAC-адрес выносится в строку описания только тогда, когда
+            // в основной строке вместо него выведен IP-адрес устройства.
+            if (hasIp) {
+                fields.push(['mac', mac["string_mac"]]);
+            }
+            fields.push(['hostname', mac.hostname]);
+            fields.push(['type', mac.type]);
+            fields.push(['location', mac.location]);
+            fields.push(['description', mac.description]);
+            var parts = [];
+            for (var i = 0; i < fields.length; i++) {
+                var v = fields[i][1];
+                if (v === undefined || v === null || v === '') { continue; }
+                parts.push(escapeHtml(v));
+            }
+            if (parts.length === 0) { return ''; }
+            return '<br>&nbsp;<span class="mac-detail">└&nbsp;' + parts.join(' · ') + '</span>';
+        }
+
         // Формирование ячейки с MAC-адресами: первые 4 адреса выводятся
         // столбиком, количество оставшихся скрытых добавляется счётчиком.
         function renderMacs(macs) {
@@ -338,10 +365,17 @@
             var html = '';
             for (var m = 0; m < shown.length; m++) {
                 if (m > 0) { html += '<br>'; }
-                html += escapeHtml(shown[m]["string_mac"]) + ' <small>' + escapeHtml(shown[m]["vendor"]) + '</small>';
+                var mac = shown[m];
+                // Если для MAC-адреса зарегистрировано устройство с IP-адресом,
+                // в основной строке показываем IP-адрес (он нагляднее для
+                // человека), а сам MAC-адрес переносим в строку описания.
+                var hasIp = !(mac.ip === undefined || mac.ip === null || mac.ip === '');
+                var mainText = hasIp ? mac.ip : mac["string_mac"];
+                html += escapeHtml(mainText) + ' <small class="vendor">' + escapeHtml(mac["vendor"]) + '</small>'
+                    + renderMacDetail(mac);
             }
             if (hidden > 0) {
-                html += '<br><span class="mac-more">+ ' + hidden + ' ещё</span>';
+                html += '<br>&nbsp;<span class="mac-more">└&nbsp;+ ' + hidden + ' ещё</span>';
             }
             return html;
         }
@@ -657,7 +691,7 @@
                     + '<td>' + escapeHtml(numText(p.out_errors)) + '</td>'
                     + '<td>'
                     + escapeHtml(formatDuration(p.last_change))
-                    + (ago ? '<br><span class="change-ago">' + escapeHtml(ago) + '</span>' : '')
+                    + (ago ? '<br>&nbsp;<span class="change-ago">└&nbsp;' + escapeHtml(ago) + '</span>' : '')
                     + '</td>'
                     + '<td class="ports-macs">' + renderMacs(p.macs) + '</td>'
                     + '</tr>';

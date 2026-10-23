@@ -387,6 +387,13 @@ html, body {
     color: #6b7280;
     font-style: italic;
 }
+/* Вторая строка описания под MAC-адресом: данные устройства из базы
+   devices (IP, тип, имя хоста, местоположение, описание) */
+.mac-detail {
+    color: #6b7280;
+    font-size: 10px;
+    white-space: nowrap;
+}
 
 /* Возраст изменения порта ("N дней ... назад") в столбце "Изм." */
 .change-ago {
@@ -436,4 +443,9 @@ html, body {
 .footer-version {
     float: right;
     color: #00a86b;
+}
+
+/* -- Vendor styles */
+.vendor {
+    color: #6b7280;
 }

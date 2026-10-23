@@ -100,6 +100,22 @@ type Mac struct {
 
 	// Vendor описывает производителя устройства.
 	Vendor string `json:"vendor"`
+
+	// IP — IP-адрес устройства из базы данных devices.
+	// Заполняется при выдаче данных web-воркером (см. internal/workers/web).
+	IP string `json:"ip"`
+
+	// Type — тип устройства (сервер, рабочая станция, принтер и т.п.).
+	Type string `json:"type"`
+
+	// Hostname — имя хоста (имя устройства).
+	Hostname string `json:"hostname"`
+
+	// Location — местоположение устройства.
+	Location string `json:"location"`
+
+	// Description — описание устройства.
+	Description string `json:"description"`
 }
 
 // String - текстовое представление MAC-адреса.
