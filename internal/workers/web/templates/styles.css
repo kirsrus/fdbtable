@@ -383,6 +383,16 @@ html, body {
     white-space: nowrap;
     font-size: 14px;
 }
+/* MAC-адрес без привязки к устройству из базы devices — красный цвет. */
+.mac-addr {
+    color: #d64545;
+    font-weight: bold;
+}
+/* IP-адрес устройства (MAC найден в базе devices и заменён на IP) — зелёный цвет. */
+.mac-ip {
+    color: #00a86b;
+    font-weight: bold;
+}
 .mac-more {
     color: #6b7280;
     font-style: italic;

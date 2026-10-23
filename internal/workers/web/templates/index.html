@@ -336,17 +336,22 @@
         function renderMacDetail(mac) {
             if (!mac) { return ''; }
             var hasIp = !(mac.ip === undefined || mac.ip === null || mac.ip === '');
-            var fields = [];
+            // Части строки описания: MAC-адрес, имя хоста, тип,
+            // местоположение и описание.
+            var parts = [];
             // MAC-адрес выносится в строку описания только тогда, когда
             // в основной строке вместо него выведен IP-адрес устройства.
+            // В подписи он отображается серым цветом — вместе с остальными
+            // данными строки описания (класс mac-detail даёт серый цвет).
             if (hasIp) {
-                fields.push(['mac', mac["string_mac"]]);
+                parts.push(escapeHtml(mac["string_mac"]));
             }
-            fields.push(['hostname', mac.hostname]);
-            fields.push(['type', mac.type]);
-            fields.push(['location', mac.location]);
-            fields.push(['description', mac.description]);
-            var parts = [];
+            var fields = [
+                ['hostname', mac.hostname],
+                ['type', mac.type],
+                ['location', mac.location],
+                ['description', mac.description]
+            ];
             for (var i = 0; i < fields.length; i++) {
                 var v = fields[i][1];
                 if (v === undefined || v === null || v === '') { continue; }
@@ -370,8 +375,17 @@
                 // в основной строке показываем IP-адрес (он нагляднее для
                 // человека), а сам MAC-адрес переносим в строку описания.
                 var hasIp = !(mac.ip === undefined || mac.ip === null || mac.ip === '');
-                var mainText = hasIp ? mac.ip : mac["string_mac"];
-                html += escapeHtml(mainText) + ' <small class="vendor">' + escapeHtml(mac["vendor"]) + '</small>'
+                var mainHtml;
+                if (hasIp) {
+                    // MAC найден в базе devices и заменён на IP —
+                    // IP-адрес устройства подсвечивается зелёным цветом.
+                    mainHtml = '<span class="mac-ip">' + escapeHtml(mac.ip) + '</span>';
+                } else {
+                    // Обычный MAC-адрес без привязки к устройству —
+                    // подсвечивается красным цветом.
+                    mainHtml = '<span class="mac-addr">' + escapeHtml(mac["string_mac"]) + '</span>';
+                }
+                html += mainHtml + ' <small class="vendor">' + escapeHtml(mac["vendor"]) + '</small>'
                     + renderMacDetail(mac);
             }
             if (hidden > 0) {
