@@ -28,9 +28,15 @@
                         <input type="text" name="ip" id="dev-ip" placeholder="IP-адрес">
                         <input type="text" name="hostname" id="dev-hostname" placeholder="Имя устройства" required>
                         <input type="text" name="mac" id="dev-mac" placeholder="MAC-адрес" required>
-                        <input type="text" name="type" id="dev-type" placeholder="Тип устройства" required>
                         <input type="text" name="location" id="dev-location" placeholder="Местоположение">
                         <input type="text" name="description" id="dev-description" placeholder="Описание">
+                        <input type="text" name="type" id="dev-type" placeholder="Тип устройства" required>
+                        <!-- Радиокнопки уже существующих в базе типов устройств.
+                             Пользователь либо вводит новый тип в поле dev-type,
+                             либо выбирает один из имеющихся — выбранное значение
+                             подставляется в поле типа. Список типов загружается
+                             скриптом через GET /api/devices/types. -->
+                        <div class="dev-types" id="dev-types"></div>
                         <div class="form-buttons">
                             <button type="submit" id="dev-submit">+ Добавить</button>
                             <button type="button" class="cancel-btn" id="dev-cancel">Отмена</button>
@@ -86,6 +92,7 @@
         var devTable = document.getElementById('dev-table');
         var devBody = document.getElementById('dev-body');
         var devPlaceholder = document.getElementById('dev-placeholder');
+        var devTypesBox = document.getElementById('dev-types');
 
         var devices = [];
 
@@ -109,6 +116,9 @@
                 var type = (el.type || '').toLowerCase();
                 if (type === 'submit' || type === 'button' || type === 'reset') { continue; }
                 if ((type === 'checkbox' || type === 'radio') && !el.checked) { continue; }
+                // Радиокнопки выбора типа — только вспомогательный элемент управления:
+                // значение уже передаётся через поле dev-type, поэтому не отправляем его.
+                if (el.name === 'dev-type-radio') { continue; }
                 parts.push(encodeURIComponent(el.name) + '=' + encodeURIComponent(el.value));
             }
             return parts.join('&');
@@ -133,6 +143,65 @@
             };
             xhr.send(params);
         }
+
+        // Загрузка списка уникальных типов устройств с сервера.
+        // Типы используются для радиокнопок под полем "Тип устройства".
+        function loadDeviceTypes() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/devices/types', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                if (xhr.status === 200) {
+                    var resp = JSON.parse(xhr.responseText);
+                    renderDeviceTypes(resp.types || []);
+                }
+            };
+            xhr.send();
+        }
+
+        // Отрисовка радиокнопок существующих типов устройств.
+        // По умолчанию ни одна радиокнопка не выбрана.
+        function renderDeviceTypes(types) {
+            var html = '<div class="dev-types-title">Выберите существующий тип:</div>';
+            for (var i = 0; i < types.length; i++) {
+                var t = types[i];
+                html += '<label class="dev-type-option">'
+                    // Общий name объединяет радиокнопки в одну группу:
+                    // при выборе одной предыдущие автоматически сбрасываются.
+                    + '<input type="radio" name="dev-type-radio" class="dev-type-radio" value="' + escapeHtml(t) + '"> '
+                    + escapeHtml(t)
+                    + '</label>';
+            }
+            devTypesBox.innerHTML = html;
+
+            // Выбор радиокнопки подставляет выбранное значение в поле типа.
+            var radios = devTypesBox.getElementsByClassName('dev-type-radio');
+            for (var r = 0; r < radios.length; r++) {
+                radios[r].onclick = (function (radio) {
+                    return function () {
+                        devType.value = radio.value;
+                    };
+                })(radios[r]);
+            }
+
+            // Приводим выбор радиокнопок в соответствие с полем типа.
+            syncDevTypeRadio();
+        }
+
+        // Синхронизация радиокнопок с текущим значением поля "Тип устройства":
+        // если поле содержит один из существующих типов — соответствующая
+        // радиокнопка помечается выбранной, иначе выбор снимается.
+        function syncDevTypeRadio() {
+            var radios = devTypesBox.getElementsByClassName('dev-type-radio');
+            var value = devType.value;
+            for (var r = 0; r < radios.length; r++) {
+                radios[r].checked = (radios[r].value === value);
+            }
+        }
+
+        // Ручной ввод в поле "Тип устройства" означает создание нового типа:
+        // выбор радиокнопки при этом снимается.
+        devType.oninput = syncDevTypeRadio;
 
         // Загрузка списка устройств с сервера.
         function loadDevices() {
@@ -226,6 +295,8 @@
                     devForm.action = '/api/devices/set';
                     devSubmit.innerHTML = 'Сохранить';
                     devCancel.style.display = 'block';
+                    // Отмечаем радиокнопку, если тип устройства уже существует.
+                    syncDevTypeRadio();
                     break;
                 }
             }
@@ -237,6 +308,8 @@
             devForm.action = '/api/devices/add';
             devSubmit.innerHTML = '+ Добавить';
             devCancel.style.display = 'none';
+            // После сброса формы ни радиокнопка, ни поле типа не выбраны.
+            syncDevTypeRadio();
         }
 
         devCancel.onclick = cancelEdit;
@@ -250,6 +323,9 @@
                 if (ok) {
                     cancelEdit();
                     loadDevices();
+                    // После добавления/изменения устройства перечитываем
+                    // список типов — в базе мог появиться новый тип.
+                    loadDeviceTypes();
                 } else {
                     window.alert(resp.error || 'Ошибка сохранения устройства');
                 }
@@ -257,8 +333,9 @@
             return false;
         };
 
-        // Загрузка списка устройств при открытии страницы.
+        // Загрузка списков устройств и их типов при открытии страницы.
         loadDevices();
+        loadDeviceTypes();
     })();
     </script>
 </body>

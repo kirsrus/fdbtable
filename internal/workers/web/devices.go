@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,10 @@ func (w *Worker) registerDevicesRoutes() {
 
 	// API списка устройств.
 	w.engine.GET("/api/devices", w.getDevices)
+
+	// API списка уникальных типов устройств, встречающихся в базе данных.
+	// Используется для радиокнопок в форме добавления/редактирования устройства.
+	w.engine.GET("/api/devices/types", w.getDeviceTypes)
 
 	// API управления устройствами (вызывается формой со страницы "Устройства").
 	w.engine.POST("/api/devices/add", w.addDevice)
@@ -95,6 +100,49 @@ func (w *Worker) getDevices(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "devices": devices})
+}
+
+// getDeviceTypes возвращает список уникальных типов устройств из базы данных.
+// Список формируется по значениям поля type всех записей bucket devices,
+// пустые значения отбрасываются, результат сортируется по алфавиту.
+// Используется для отрисовки радиокнопок в форме устройства на странице.
+func (w *Worker) getDeviceTypes(c *gin.Context) {
+	seen := make(map[string]struct{})
+	types := make([]string, 0)
+
+	err := w.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(devicesBucket))
+		if b == nil {
+			// Bucket ещё не создан — записей с типами нет.
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error {
+			var dev model.Device
+			if err := json.Unmarshal(v, &dev); err != nil {
+				return err
+			}
+			typ := strings.TrimSpace(dev.Type)
+			if typ == "" {
+				return nil
+			}
+			if _, ok := seen[typ]; ok {
+				return nil
+			}
+			seen[typ] = struct{}{}
+			types = append(types, typ)
+			return nil
+		})
+	})
+	if err != nil {
+		w.log.Error("ошибка чтения типов устройств", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "ошибка чтения базы данных"})
+		return
+	}
+
+	// Сортируем по алфавиту для удобства выбора в форме.
+	sort.Strings(types)
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "types": types})
 }
 
 // setDevice изменяет информацию о существующем устройстве.

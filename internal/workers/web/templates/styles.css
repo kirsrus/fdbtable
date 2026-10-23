@@ -345,6 +345,36 @@ html, body {
     white-space: nowrap;
 }
 
+/* ---------- Радиокнопки типов устройств в форме ---------- */
+.dev-types {
+    border: 1px solid #d5dce5;
+    background: #f8fafc;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    max-height: 110px;
+    overflow-y: auto;
+}
+.dev-types-title {
+    color: #6b7280;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+.dev-type-option {
+    display: block;
+    color: #1f2937;
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+}
+.dev-type-option:hover {
+    color: #00a86b;
+}
+.dev-type-option input[type="radio"] {
+    vertical-align: -1px;
+    margin: 0 4px 0 0;
+    cursor: pointer;
+}
+
 /* ---------- Футер ---------- */
 .footer {
     background: #e2e8f0;
