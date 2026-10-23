@@ -397,6 +397,12 @@ html, body {
     color: #6b7280;
     font-style: italic;
 }
+/* Порт поднят (oper_state = up), но MAC-адреса не обнаружены —
+   жёлтый знак вопроса в ячейке MAC. */
+.mac-unknown {
+    color: #eab308;
+    font-weight: bold;
+}
 /* Вторая строка описания под MAC-адресом: данные устройства из базы
    devices (IP, тип, имя хоста, местоположение, описание) */
 .mac-detail {

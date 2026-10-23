@@ -394,6 +394,17 @@
             return html;
         }
 
+        // Формирование ячейки с MAC-адресами. Если порт поднят
+        // (oper_state = up), но в FDB-таблице не обнаружено ни одного
+        // MAC-адреса, выводится жёлтый знак вопроса — признак аномалии.
+        function renderMacsCell(macs, oper) {
+            var html = renderMacs(macs);
+            if (!html && oper === 'up') {
+                html = '<span class="mac-unknown" title="MAC-адреса не обнаружены"><big>?</big></span>';
+            }
+            return html;
+        }
+
         // Текстовое представление числа: пустые значения — пустой строкой,
         // нули выводятся как 0.
         function numText(v) {
@@ -707,7 +718,7 @@
                     + escapeHtml(formatDuration(p.last_change))
                     + (ago ? '<br>&nbsp;<span class="change-ago">└&nbsp;' + escapeHtml(ago) + '</span>' : '')
                     + '</td>'
-                    + '<td class="ports-macs">' + renderMacs(p.macs) + '</td>'
+                    + '<td class="ports-macs">' + renderMacsCell(p.macs, oper) + '</td>'
                     + '</tr>';
             }
             if (list.length === 0) {
