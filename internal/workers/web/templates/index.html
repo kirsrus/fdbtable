@@ -64,17 +64,17 @@
                     <table class="ports-table" id="ports-table" style="display:none;">
                         <thead>
                             <tr>
-                                <th>Индекс</th>
-                                <th>Порт</th>
-                                <th>Адм. статус</th>
-                                <th>Статус</th>
-                                <th>Скорость</th>
-                                <th>Вх. поток</th>
-                                <th>Исх. поток</th>
-                                <th>Вх. ош.</th>
-                                <th>Исх. ош.</th>
-                                <th>Изм.</th>
-                                <th>MAC</th>
+                                <th class="sortable" data-sort="index">Индекс <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="name">Порт <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="admin_state">Адм. статус <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="oper_state">Статус <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="speed">Скорость <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="in_rate">Вх. поток <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="out_rate">Исх. поток <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="in_errors">Вх. ош. <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="out_errors">Исх. ош. <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="last_change">Изм. <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="macs">MAC <span class="sort-indicator"></span></th>
                             </tr>
                         </thead>
                         <tbody id="ports-body"></tbody>
@@ -117,6 +117,14 @@
         var switches = [];
         var currentSort = 'ip';
         var selectedIp = null;
+
+        // Состояние сортировки таблицы портов: поле и направление ('asc'/'desc').
+        var portsSortField = '';
+        var portsSortDir = 'asc';
+        // Последние загруженные порты и uptime — для пересортировки
+        // по клику на заголовок столбца.
+        var portsData = [];
+        var portsUptime = 0;
       
         // Опрос данных о коммутаторе после запуска сбора (см. startPolling).
         // pollTimer — идентификатор таймера, pollAttempts — число попыток,
@@ -556,14 +564,78 @@
         	}
         }
 
+        // Сравнение двух значений для сортировки:
+        // числа — численно, IP-адреса — по октетам, остальное — как строки.
+        function compareValues(a, b) {
+            var aStr = String(a === null || a === undefined ? '' : a);
+            var bStr = String(b === null || b === undefined ? '' : b);
+            if (aStr !== '' && bStr !== '' && !isNaN(aStr) && !isNaN(bStr)) {
+                var an = parseFloat(aStr);
+                var bn = parseFloat(bStr);
+                if (an < bn) { return -1; }
+                if (an > bn) { return 1; }
+                return 0;
+            }
+            var aOct = aStr.split('.');
+            var bOct = bStr.split('.');
+            if (aOct.length === 4 && bOct.length === 4) {
+                for (var o = 0; o < 4; o++) {
+                    var ao = parseInt(aOct[o], 10);
+                    var bo = parseInt(bOct[o], 10);
+                    if (ao < bo) { return -1; }
+                    if (ao > bo) { return 1; }
+                }
+                return 0;
+            }
+            var al = aStr.toLowerCase();
+            var bl = bStr.toLowerCase();
+            if (al < bl) { return -1; }
+            if (al > bl) { return 1; }
+            return 0;
+        }
+
+        // Значение порта для сортировки по столбцу.
+        // Для столбца MAC сортируем по количеству адресов в ячейке.
+        function getPortValue(p, field) {
+            if (field === 'macs') {
+                return (p.macs && p.macs.length) ? p.macs.length : 0;
+            }
+            return p[field];
+        }
+
+        // Обновление стрелок сортировки в заголовках таблицы портов.
+        function updatePortSortIndicators() {
+            var heads = portsTable.getElementsByTagName('th');
+            for (var i = 0; i < heads.length; i++) {
+                var th = heads[i];
+                var ind = th.getElementsByClassName('sort-indicator')[0];
+                if (!ind) { continue; }
+                if (th.getAttribute('data-sort') === portsSortField) {
+                    ind.innerHTML = (portsSortDir === 'asc') ? ' &#9650;' : ' &#9660;';
+                } else {
+                    ind.innerHTML = '';
+                }
+            }
+        }
+
         // Отрисовка таблицы портов. uptime — время работы коммутатора
         // (используется для вычисления возраста последнего изменения порта).
         function renderPorts(ports, uptime) {
+            portsData = ports;
+            portsUptime = uptime;
             portsPlaceholder.style.display = 'none';
             portsTable.style.display = 'table';
+            // Копия списка с учётом текущей сортировки по столбцу.
+            var list = portsData.slice();
+            if (portsSortField) {
+                list.sort(function (a, b) {
+                    var r = compareValues(getPortValue(a, portsSortField), getPortValue(b, portsSortField));
+                    return (portsSortDir === 'asc') ? r : -r;
+                });
+            }
             var html = '';
-            for (var i = 0; i < ports.length; i++) {
-                var p = ports[i];
+            for (var i = 0; i < list.length; i++) {
+                var p = list[i];
                 var admin = stateText(adminStates, p.admin_state);
                 var oper = stateText(operStates, p.oper_state);
                 // Возраст изменения: сколько времени назад порт сменил состояние.
@@ -590,10 +662,11 @@
                     + '<td class="ports-macs">' + renderMacs(p.macs) + '</td>'
                     + '</tr>';
             }
-            if (ports.length === 0) {
+            if (list.length === 0) {
                 html = '<tr><td colspan="11">Порты не найдены</td></tr>';
             }
             portsBody.innerHTML = html;
+            updatePortSortIndicators();
         }
 
         // Редактирование коммутатора: заполняем форму данными и меняем action.
@@ -625,6 +698,25 @@
             swForm.action = '/api/swinfo/add';
             swSubmit.innerHTML = '+ Добавить';
             swCancel.style.display = 'none';
+        }
+
+        // Клик по заголовку столбца таблицы портов — сортировка по этому столбцу.
+        // Повторный клик по тому же столбцу переключает направление.
+        var portHeads = portsTable.getElementsByTagName('th');
+        for (var ph = 0; ph < portHeads.length; ph++) {
+            portHeads[ph].onclick = (function (th) {
+                return function () {
+                    var field = th.getAttribute('data-sort');
+                    if (!field) { return; }
+                    if (field === portsSortField) {
+                        portsSortDir = (portsSortDir === 'asc') ? 'desc' : 'asc';
+                    } else {
+                        portsSortField = field;
+                        portsSortDir = 'asc';
+                    }
+                    renderPorts(portsData, portsUptime);
+                };
+            })(portHeads[ph]);
         }
 
         // Кнопки сортировки.

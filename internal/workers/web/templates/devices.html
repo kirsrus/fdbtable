@@ -23,7 +23,7 @@
             <!-- Левая колонка: только форма добавления (и редактирования) устройства -->
             <div class="sidebar">
                 <div class="panel">
-                    <div class="panel-title">// УСТРОЙСТВА</div>
+                    <div class="panel-title">// ДОБАВИТЬ УСТРОЙСТВА</div>
                     <form id="dev-form" class="sw-form" method="post" action="/api/devices/add">
                         <input type="text" name="ip" id="dev-ip" placeholder="IP-адрес">
                         <input type="text" name="hostname" id="dev-hostname" placeholder="Имя устройства" required>
@@ -48,16 +48,22 @@
             <div class="content">
                 <div class="panel ports-panel">
                     <div class="panel-title">// УСТРОЙСТВА В БАЗЕ</div>
+                    <!-- Фильтр по типам устройств: чекбоксы, можно выбрать несколько типов.
+                         Список типов строится скриптом из загруженных устройств. -->
+                    <div class="dev-filters" id="dev-filters">
+                        <div class="dev-filters-title">Фильтр по типу:</div>
+                        <div class="dev-filters-options" id="dev-filter-options"></div>
+                    </div>
                     <div class="ports-placeholder" id="dev-placeholder">Загрузка...</div>
                     <table class="dev-table" id="dev-table" style="display:none;">
                         <thead>
                             <tr>
-                                <th>IP</th>
-                                <th>Имя</th>
-                                <th>MAC</th>
-                                <th>Тип</th>
-                                <th>Местоположение</th>
-                                <th>Описание</th>
+                                <th class="sortable" data-sort="ip">IP <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="hostname">Имя <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="mac">MAC <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="type">Тип <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="location">Местоположение <span class="sort-indicator"></span></th>
+                                <th class="sortable" data-sort="description">Описание <span class="sort-indicator"></span></th>
                                 <th>Действия</th>
                             </tr>
                         </thead>
@@ -93,8 +99,15 @@
         var devBody = document.getElementById('dev-body');
         var devPlaceholder = document.getElementById('dev-placeholder');
         var devTypesBox = document.getElementById('dev-types');
+        var devFilterOptions = document.getElementById('dev-filter-options');
 
         var devices = [];
+
+        // Состояние сортировки таблицы: поле и направление ('asc'/'desc').
+        var sortField = '';
+        var sortDir = 'asc';
+        // Выбранные в фильтре типы устройств (пустой список = показать все).
+        var selectedTypes = [];
 
         // Экранирование HTML-спецсимволов.
         function escapeHtml(s) {
@@ -215,6 +228,8 @@
                 if (xhr.status === 200) {
                     var resp = JSON.parse(xhr.responseText);
                     devices = resp.devices || [];
+                    // Пересобираем чекбоксы фильтра по типам (выбор сохраняется).
+                    renderTypeFilters();
                     renderDevices();
                 } else {
                     devPlaceholder.style.display = 'block';
@@ -224,11 +239,118 @@
             xhr.send();
         }
 
-        // Отрисовка таблицы устройств в правой панели.
-        function renderDevices() {
-            var html = '';
+        // Сравнение двух значений для сортировки:
+        // числа — численно, IP-адреса — по октетам, остальное — как строки.
+        function compareValues(a, b) {
+            var aStr = String(a === null || a === undefined ? '' : a);
+            var bStr = String(b === null || b === undefined ? '' : b);
+            if (aStr !== '' && bStr !== '' && !isNaN(aStr) && !isNaN(bStr)) {
+                var an = parseFloat(aStr);
+                var bn = parseFloat(bStr);
+                if (an < bn) { return -1; }
+                if (an > bn) { return 1; }
+                return 0;
+            }
+            var aOct = aStr.split('.');
+            var bOct = bStr.split('.');
+            if (aOct.length === 4 && bOct.length === 4) {
+                for (var o = 0; o < 4; o++) {
+                    var ao = parseInt(aOct[o], 10);
+                    var bo = parseInt(bOct[o], 10);
+                    if (ao < bo) { return -1; }
+                    if (ao > bo) { return 1; }
+                }
+                return 0;
+            }
+            var al = aStr.toLowerCase();
+            var bl = bStr.toLowerCase();
+            if (al < bl) { return -1; }
+            if (al > bl) { return 1; }
+            return 0;
+        }
+
+        // Список устройств с учётом фильтра по типам и текущей сортировки.
+        function getVisibleDevices() {
+            var list = [];
             for (var i = 0; i < devices.length; i++) {
                 var dev = devices[i];
+                // Если выбраны типы — устройства других типов пропускаем.
+                if (selectedTypes.length > 0 && selectedTypes.indexOf(dev.type || '') < 0) { continue; }
+                list.push(dev);
+            }
+            if (sortField) {
+                list.sort(function (a, b) {
+                    var r = compareValues(a[sortField], b[sortField]);
+                    return (sortDir === 'asc') ? r : -r;
+                });
+            }
+            return list;
+        }
+
+        // Отрисовка чекбоксов фильтра по типам устройств.
+        // Список типов строится из загруженных устройств; выбор сохраняется,
+        // если тип по-прежнему присутствует в базе.
+        function renderTypeFilters() {
+            var types = [];
+            for (var i = 0; i < devices.length; i++) {
+                var t = devices[i].type || '';
+                if (t !== '' && types.indexOf(t) < 0) { types.push(t); }
+            }
+            types.sort();
+            // Оставляем в выборе только типы, которые ещё есть в списке.
+            var keep = [];
+            for (var s = 0; s < selectedTypes.length; s++) {
+                if (types.indexOf(selectedTypes[s]) >= 0) { keep.push(selectedTypes[s]); }
+            }
+            selectedTypes = keep;
+            var html = '';
+            for (var k = 0; k < types.length; k++) {
+                var checked = (selectedTypes.indexOf(types[k]) >= 0) ? ' checked' : '';
+                html += '<label class="dev-filter-option">'
+                    + '<input type="checkbox" class="dev-filter-check" value="' + escapeHtml(types[k]) + '"' + checked + '> '
+                    + escapeHtml(types[k])
+                    + '</label>';
+            }
+            devFilterOptions.innerHTML = html;
+            // Клик по чекбоксу — обновляем выбор и перерисовываем таблицу.
+            var checks = devFilterOptions.getElementsByClassName('dev-filter-check');
+            for (var c = 0; c < checks.length; c++) {
+                checks[c].onclick = (function (chk) {
+                    return function () {
+                        var t = chk.value;
+                        var idx = selectedTypes.indexOf(t);
+                        if (chk.checked && idx < 0) {
+                            selectedTypes.push(t);
+                        } else if (!chk.checked && idx >= 0) {
+                            selectedTypes.splice(idx, 1);
+                        }
+                        renderDevices();
+                    };
+                })(checks[c]);
+            }
+        }
+
+        // Обновление стрелок сортировки в заголовках таблицы.
+        function updateSortIndicators() {
+            var heads = devTable.getElementsByTagName('th');
+            for (var i = 0; i < heads.length; i++) {
+                var th = heads[i];
+                var ind = th.getElementsByClassName('sort-indicator')[0];
+                if (!ind) { continue; }
+                if (th.getAttribute('data-sort') === sortField) {
+                    ind.innerHTML = (sortDir === 'asc') ? ' &#9650;' : ' &#9660;';
+                } else {
+                    ind.innerHTML = '';
+                }
+            }
+        }
+
+        // Отрисовка таблицы устройств в правой панели.
+        function renderDevices() {
+            var list = getVisibleDevices();
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+                var dev = list[i];
                 html += '<tr>'
                     + '<td>' + escapeHtml(dev.ip || '') + '</td>'
                     + '<td>' + escapeHtml(dev.hostname || '') + '</td>'
@@ -242,12 +364,13 @@
                     + '</td>'
                     + '</tr>';
             }
-            if (devices.length === 0) {
+            if (list.length === 0) {
                 html = '<tr><td colspan="7">Устройства не найдены</td></tr>';
             }
             devBody.innerHTML = html;
             devPlaceholder.style.display = 'none';
             devTable.style.display = 'table';
+            updateSortIndicators();
 
             // Клик по значку "изменить".
             var edits = devBody.getElementsByClassName('sw-edit');
@@ -332,6 +455,25 @@
             });
             return false;
         };
+
+        // Клик по заголовку столбца — сортировка по этому столбцу.
+        // Повторный клик по тому же столбцу переключает направление.
+        var heads = devTable.getElementsByTagName('th');
+        for (var h = 0; h < heads.length; h++) {
+            heads[h].onclick = (function (th) {
+                return function () {
+                    var field = th.getAttribute('data-sort');
+                    if (!field) { return; }
+                    if (field === sortField) {
+                        sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
+                    } else {
+                        sortField = field;
+                        sortDir = 'asc';
+                    }
+                    renderDevices();
+                };
+            })(heads[h]);
+        }
 
         // Загрузка списков устройств и их типов при открытии страницы.
         loadDevices();

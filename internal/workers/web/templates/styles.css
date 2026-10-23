@@ -286,6 +286,56 @@ html, body {
 .dev-table tr:hover td {
     background: #e2e8f0;
 }
+
+/* ---------- Сортировка в таблицах (устройств и портов) ---------- */
+.ports-table th.sortable,
+.dev-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.ports-table th.sortable:hover,
+.dev-table th.sortable:hover {
+    background: #d5dce5;
+}
+.sort-indicator {
+    color: #00a86b;
+    font-size: 10px;
+}
+
+/* ---------- Фильтр по типам устройств над таблицей ---------- */
+.dev-filters {
+    padding: 6px 10px;
+    border-bottom: 1px solid #d5dce5;
+    background: #f8fafc;
+    overflow: hidden; /* clearfix: заголовок и чекбоксы в одну строку */
+}
+.dev-filters-title {
+    float: left;
+    color: #6b7280;
+    font-size: 11px;
+    margin: 0 8px 0 0;
+}
+.dev-filters-options {
+    float: left;
+}
+.dev-filter-option {
+    display: inline-block;
+    color: #1f2937;
+    font-size: 12px;
+    line-height: 1.6;
+    margin-right: 8px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.dev-filter-option:hover {
+    color: #00a86b;
+}
+.dev-filter-option input[type="checkbox"] {
+    vertical-align: -1px;
+    margin: 0 4px 0 0;
+    cursor: pointer;
+}
+
 .ports-placeholder {
     padding: 20px;
     color: #6b7280;
