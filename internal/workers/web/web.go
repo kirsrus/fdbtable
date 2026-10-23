@@ -63,6 +63,9 @@ func New(port int, db *bolt.DB, log *slog.Logger, version string, collectCh chan
 	// Регистрация маршрутов управления информацией о коммутаторах.
 	w.registerSwInfoRoutes()
 
+	// Регистрация маршрутов страницы "Устройства".
+	w.registerDevicesRoutes()
+
 	return w
 }
 

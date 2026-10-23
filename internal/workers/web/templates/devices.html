@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Каркас страницы на div-блоках с float: совместимо со старыми браузерами -->
+    <div class="page">
+        <!-- Заголовок -->
+        <div class="header">
+            <span class="prompt">></span> <span class="title">fdbtable</span><span class="cursor">_</span>
+            <span class="header-sub">FDB таблицы сетевых коммутаторов</span>
+            <!-- Меню перехода между страницами интерфейса -->
+            <nav class="header-nav">
+                <a href="/" class="nav-link">Коммутаторы</a>
+                <a href="/devices" class="nav-link active">Устройства</a>
+            </nav>
+        </div>
+        <div class="body">
+            <!-- Левая колонка: только форма добавления (и редактирования) устройства -->
+            <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">// УСТРОЙСТВА</div>
+                    <form id="dev-form" class="sw-form" method="post" action="/api/devices/add">
+                        <input type="text" name="ip" id="dev-ip" placeholder="IP-адрес">
+                        <input type="text" name="hostname" id="dev-hostname" placeholder="Имя устройства" required>
+                        <input type="text" name="mac" id="dev-mac" placeholder="MAC-адрес" required>
+                        <input type="text" name="type" id="dev-type" placeholder="Тип устройства" required>
+                        <input type="text" name="location" id="dev-location" placeholder="Местоположение">
+                        <input type="text" name="description" id="dev-description" placeholder="Описание">
+                        <div class="form-buttons">
+                            <button type="submit" id="dev-submit">+ Добавить</button>
+                            <button type="button" class="cancel-btn" id="dev-cancel">Отмена</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Правая, большая колонка: таблица устройств из базы данных -->
+            <div class="content">
+                <div class="panel ports-panel">
+                    <div class="panel-title">// УСТРОЙСТВА В БАЗЕ</div>
+                    <div class="ports-placeholder" id="dev-placeholder">Загрузка...</div>
+                    <table class="dev-table" id="dev-table" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>Имя</th>
+                                <th>MAC</th>
+                                <th>Тип</th>
+                                <th>Местоположение</th>
+                                <th>Описание</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dev-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- Футер: копирайт и версия программы -->
+        <div class="footer">
+            <span>&copy; 2026 Sterlikov Kirill</span>
+            <span class="footer-version">fdbtable {{ .version }}</span>
+        </div>
+    </div>
+
+    <script>
+    // Работа с устройствами: добавление/редактирование в левой панели,
+    // вывод списка из базы данных — таблицей в правой панели.
+    // Без фреймворков: XMLHttpRequest, var, function — совместимо со старыми браузерами.
+    (function () {
+        'use strict';
+
+        var devForm = document.getElementById('dev-form');
+        var devIp = document.getElementById('dev-ip');
+        var devHostname = document.getElementById('dev-hostname');
+        var devMac = document.getElementById('dev-mac');
+        var devType = document.getElementById('dev-type');
+        var devLocation = document.getElementById('dev-location');
+        var devDescription = document.getElementById('dev-description');
+        var devSubmit = document.getElementById('dev-submit');
+        var devCancel = document.getElementById('dev-cancel');
+        var devTable = document.getElementById('dev-table');
+        var devBody = document.getElementById('dev-body');
+        var devPlaceholder = document.getElementById('dev-placeholder');
+
+        var devices = [];
+
+        // Экранирование HTML-спецсимволов.
+        function escapeHtml(s) {
+            if (s === null || s === undefined) { return ''; }
+            return String(s)
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"');
+        }
+
+        // Сериализация полей формы в строку application/x-www-form-urlencoded.
+        function serializeForm(form) {
+            var parts = [];
+            var els = form.elements;
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (!el.name || el.disabled) { continue; }
+                var type = (el.type || '').toLowerCase();
+                if (type === 'submit' || type === 'button' || type === 'reset') { continue; }
+                if ((type === 'checkbox' || type === 'radio') && !el.checked) { continue; }
+                parts.push(encodeURIComponent(el.name) + '=' + encodeURIComponent(el.value));
+            }
+            return parts.join('&');
+        }
+
+        // Универсальный POST-запрос через XMLHttpRequest (работает в старых браузерах).
+        // callback(ok, resp) — ok: успешен ли запрос, resp: разобранный JSON-ответ.
+        function postForm(url, params, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                var resp = null;
+                try {
+                    resp = JSON.parse(xhr.responseText);
+                } catch (err) {
+                    resp = null;
+                }
+                var ok = (xhr.status >= 200 && xhr.status < 300) && resp && resp.ok;
+                callback(ok, resp || {});
+            };
+            xhr.send(params);
+        }
+
+        // Загрузка списка устройств с сервера.
+        function loadDevices() {
+            devPlaceholder.style.display = 'block';
+            devPlaceholder.innerHTML = 'Загрузка...';
+            devTable.style.display = 'none';
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/devices', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                if (xhr.status === 200) {
+                    var resp = JSON.parse(xhr.responseText);
+                    devices = resp.devices || [];
+                    renderDevices();
+                } else {
+                    devPlaceholder.style.display = 'block';
+                    devPlaceholder.innerHTML = 'Ошибка загрузки списка';
+                }
+            };
+            xhr.send();
+        }
+
+        // Отрисовка таблицы устройств в правой панели.
+        function renderDevices() {
+            var html = '';
+            for (var i = 0; i < devices.length; i++) {
+                var dev = devices[i];
+                html += '<tr>'
+                    + '<td>' + escapeHtml(dev.ip || '') + '</td>'
+                    + '<td>' + escapeHtml(dev.hostname || '') + '</td>'
+                    + '<td>' + escapeHtml(dev.mac || '') + '</td>'
+                    + '<td>' + escapeHtml(dev.type || '') + '</td>'
+                    + '<td>' + escapeHtml(dev.location || '') + '</td>'
+                    + '<td>' + escapeHtml(dev.description || '') + '</td>'
+                    + '<td class="dev-actions">'
+                    + '<a href="#" class="sw-edit" data-mac="' + escapeHtml(dev.mac) + '" title="Изменить">&#9998;</a>'
+                    + '<button type="button" class="sw-del" data-mac="' + escapeHtml(dev.mac) + '" title="Удалить">&#10005;</button>'
+                    + '</td>'
+                    + '</tr>';
+            }
+            if (devices.length === 0) {
+                html = '<tr><td colspan="7">Устройства не найдены</td></tr>';
+            }
+            devBody.innerHTML = html;
+            devPlaceholder.style.display = 'none';
+            devTable.style.display = 'table';
+
+            // Клик по значку "изменить".
+            var edits = devBody.getElementsByClassName('sw-edit');
+            for (var k = 0; k < edits.length; k++) {
+                edits[k].onclick = (function (a) {
+                    return function (e) {
+                        if (e.preventDefault) { e.preventDefault(); }
+                        startEdit(a.getAttribute('data-mac'));
+                    };
+                })(edits[k]);
+            }
+
+            // Клик по кнопке "удалить" — AJAX-запрос на удаление.
+            var dels = devBody.getElementsByClassName('sw-del');
+            for (var d = 0; d < dels.length; d++) {
+                dels[d].onclick = (function (btn) {
+                    return function (e) {
+                        if (e.preventDefault) { e.preventDefault(); }
+                        var mac = btn.getAttribute('data-mac');
+                        if (!window.confirm('Удалить устройство ' + mac + '?')) { return; }
+                        postForm('/api/devices/del', 'mac=' + encodeURIComponent(mac), function (ok, resp) {
+                            if (ok) {
+                                loadDevices();
+                            } else {
+                                window.alert(resp.error || 'Ошибка удаления устройства');
+                            }
+                        });
+                    };
+                })(dels[d]);
+            }
+        }
+
+        // Редактирование устройства: заполняем форму данными и меняем action.
+        // Ключ записи устройства — MAC-адрес, поэтому его тоже подставляем в форму.
+        function startEdit(mac) {
+            for (var i = 0; i < devices.length; i++) {
+                if (devices[i].mac === mac) {
+                    var dev = devices[i];
+                    devIp.value = dev.ip || '';
+                    devHostname.value = dev.hostname || '';
+                    devMac.value = dev.mac || '';
+                    devType.value = dev.type || '';
+                    devLocation.value = dev.location || '';
+                    devDescription.value = dev.description || '';
+                    devForm.action = '/api/devices/set';
+                    devSubmit.innerHTML = 'Сохранить';
+                    devCancel.style.display = 'block';
+                    break;
+                }
+            }
+        }
+
+        // Отмена редактирования — возврат к режиму добавления.
+        function cancelEdit() {
+            devForm.reset();
+            devForm.action = '/api/devices/add';
+            devSubmit.innerHTML = '+ Добавить';
+            devCancel.style.display = 'none';
+        }
+
+        devCancel.onclick = cancelEdit;
+
+        // Отправка формы добавления/редактирования через AJAX вместо перехода на страницу.
+        devForm.onsubmit = function (e) {
+            if (e.preventDefault) { e.preventDefault(); }
+            var url = devForm.getAttribute('action') || '/api/devices/add';
+            var params = serializeForm(devForm);
+            postForm(url, params, function (ok, resp) {
+                if (ok) {
+                    cancelEdit();
+                    loadDevices();
+                } else {
+                    window.alert(resp.error || 'Ошибка сохранения устройства');
+                }
+            });
+            return false;
+        };
+
+        // Загрузка списка устройств при открытии страницы.
+        loadDevices();
+    })();
+    </script>
+</body>
+</html>

@@ -51,6 +51,30 @@ html, body {
     50% { opacity: 0; }
 }
 
+/* Меню перехода между страницами интерфейса */
+.header-nav {
+    float: right;
+    margin-left: 16px;
+}
+.header-nav .nav-link {
+    display: inline-block;
+    color: #6b7280;
+    text-decoration: none;
+    border: 1px solid #c3ccd6;
+    padding: 3px 10px;
+    margin-right: 4px;
+    font-size: 12px;
+}
+.header-nav .nav-link:hover {
+    color: #00a86b;
+    border-color: #00a86b;
+}
+.header-nav .nav-link.active {
+    color: #00a86b;
+    border-color: #00a86b;
+    background: #e2e8f0;
+}
+
 /* ---------- Тело ---------- */
 .body {
     overflow: hidden; /* clearfix для float-колонок */
@@ -232,17 +256,19 @@ html, body {
     background: #d5dce5;
 }
 
-/* ---------- Таблица портов (растягивающаяся) ---------- */
+/* ---------- Таблица портов и таблица устройств (растягивающиеся) ---------- */
 .ports-panel {
     height: 100%;
     overflow-x: auto;
 }
-.ports-table {
+.ports-table,
+.dev-table {
     width: 100%;
     height: 100%;
     border-collapse: collapse;
 }
-.ports-table th {
+.ports-table th,
+.dev-table th {
     background: #e2e8f0;
     color: #0077b6;
     text-align: left;
@@ -250,18 +276,42 @@ html, body {
     border-bottom: 1px solid #c3ccd6;
     font-size: 12px;
 }
-.ports-table td {
+.ports-table td,
+.dev-table td {
     padding: 5px 10px;
     border-bottom: 1px solid #d5dce5;
     color: #1f2937;
 }
-.ports-table tr:hover td {
+.ports-table tr:hover td,
+.dev-table tr:hover td {
     background: #e2e8f0;
 }
 .ports-placeholder {
     padding: 20px;
     color: #6b7280;
     text-align: center;
+}
+
+/* ---------- Кнопки действий в таблице устройств ---------- */
+.dev-actions {
+    white-space: nowrap;
+}
+.dev-actions a,
+.dev-actions button {
+    color: #6b7280;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    font-family: inherit;
+}
+.dev-actions a:hover {
+    color: #0077b6;
+}
+.dev-actions button:hover {
+    color: #d64545;
 }
 
 /* ---------- Цвета состояний портов ---------- */
